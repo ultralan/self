@@ -371,6 +371,45 @@
   }
   .mgr-dialog .create-area button:hover { background: #15803d; }
   .mgr-dialog .empty-msg { text-align: center; color: #bbb; padding: 24px 0; font-size: 13px; }
+
+  /* Data Manager */
+  .data-overlay {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(0,0,0,0.3); display: none;
+    align-items: center; justify-content: center;
+  }
+  .data-overlay.show { display: flex; }
+  .data-dialog {
+    background: white; border-radius: 14px; padding: 24px;
+    min-width: 360px; max-width: 460px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  }
+  .data-dialog h3 { font-size: 16px; margin-bottom: 16px; color: #333; }
+  .data-dialog .close {
+    float: right; border: none; background: none;
+    font-size: 20px; cursor: pointer; color: #999; line-height: 1;
+  }
+  .data-dialog .close:hover { color: #333; }
+  .data-dialog .section { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
+  .data-dialog .section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .data-dialog .section p { font-size: 13px; color: #666; margin-bottom: 10px; }
+  .data-dialog .section .btn-row-data { display: flex; gap: 8px; flex-wrap: wrap; }
+  .data-dialog .section .btn-row-data label.btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 10px 20px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .data-dialog .section .btn-row-data label.btn:active { transform: scale(0.97); }
+  .data-dialog .section .btn-row-data .btn-export { background: #2563eb; color: white; }
+  .data-dialog .section .btn-row-data .btn-export:hover { background: #1d4ed8; }
+  .data-dialog .section .btn-row-data .btn-import { background: #16a34a; color: white; }
+  .data-dialog .section .btn-row-data .btn-import:hover { background: #15803d; }
+  .data-dialog .section .btn-row-data .btn-danger { background: #dc2626; color: white; }
+  .data-dialog .section .btn-row-data .btn-danger:hover { background: #b91c1c; }
+  .data-dialog .section .btn-row-data .btn-secondary-data { background: #f0f0f0; color: #555; }
+  .data-dialog .section .btn-row-data .btn-secondary-data:hover { background: #e0e0e0; }
+  #importFileInput { display: none; }
 </style>
 </head>
 <body>
@@ -381,7 +420,8 @@
   </div>
 
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-    <button class="btn btn-outline btn-sm" id="tagMgrBtn" style="margin-left:auto">🏷️ 标签管理</button>
+    <button class="btn btn-outline btn-sm" id="tagMgrBtn">🏷️ 标签管理</button>
+    <button class="btn btn-outline btn-sm" id="dataMgrBtn">💾 数据管理</button>
   </div>
 
   <div class="tabs">
@@ -479,6 +519,34 @@
       <input id="tagPickerNewColor" class="cp" type="color" value="#f97316">
       <button id="tagPickerNewBtn">创建</button>
     </div>
+  </div>
+</div>
+
+<!-- ====== Data Manager Overlay ====== -->
+<div class="data-overlay" id="dataMgrOverlay">
+  <div class="data-dialog">
+    <button class="close" id="dataMgrClose">&times;</button>
+    <h3>💾 数据管理</h3>
+    <div class="section">
+      <p>数据存储在浏览器本地（localStorage），换设备或清缓存会丢失。建议定期导出备份。</p>
+    </div>
+    <div class="section">
+      <p><strong>📤 导出 / 📥 导入</strong></p>
+      <div class="btn-row-data">
+        <button class="btn btn-export" id="exportBtn">⬇ 导出全部数据</button>
+        <label class="btn btn-import" id="importLabel">⬆ 导入数据
+          <input type="file" id="importFileInput" accept=".json">
+        </label>
+      </div>
+    </div>
+    <div class="section">
+      <p><strong>⚠️ 危险操作</strong></p>
+      <div class="btn-row-data">
+        <button class="btn btn-secondary-data" id="resetCompletedBtn">重置完成记录</button>
+        <button class="btn btn-danger" id="resetAllBtn">重置全部数据</button>
+      </div>
+    </div>
+    <div id="dataMsg" style="font-size:13px;color:#166534;margin-top:8px;display:none"></div>
   </div>
 </div>
 
@@ -973,6 +1041,112 @@ document.getElementById('tagMgrList').addEventListener('click', (e) => {
   refreshList();
   if (currentProblem) renderPickerProblem(currentProblem);
 });
+// ====== DATA MANAGER ======
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: todayStr(),
+    lcPickedIds: JSON.parse(localStorage.getItem('lcPickedIds') || '[]'),
+    lcCompleted: JSON.parse(localStorage.getItem('lcCompleted') || '{}'),
+    lcTagDefs: JSON.parse(localStorage.getItem('lcTagDefs') || '{}'),
+    lcProblemTags: JSON.parse(localStorage.getItem('lcProblemTags') || '{}'),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `leetcode-data-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showDataMsg('✅ 数据已导出');
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.lcCompleted && !data.lcTagDefs) {
+        showDataMsg('❌ 无效的备份文件', false);
+        return;
+      }
+      if (data.lcPickedIds) localStorage.setItem('lcPickedIds', JSON.stringify(data.lcPickedIds));
+      if (data.lcCompleted) localStorage.setItem('lcCompleted', JSON.stringify(data.lcCompleted));
+      if (data.lcTagDefs) localStorage.setItem('lcTagDefs', JSON.stringify(data.lcTagDefs));
+      if (data.lcProblemTags) localStorage.setItem('lcProblemTags', JSON.stringify(data.lcProblemTags));
+      // Reload state
+      pickedIds = loadPicked();
+      completedMap = loadCompleted();
+      tagDefs = loadTags();
+      problemTags = loadProblemTags();
+      updatePickerStats();
+      refreshList();
+      renderHeatmap();
+      buildTagFilterOptions();
+      renderTagMgr();
+      if (currentProblem) renderPickerProblem(currentProblem);
+      showDataMsg(`✅ 导入成功！共恢复 ${data.lcCompleted ? Object.keys(data.lcCompleted).length : 0} 条完成记录`);
+    } catch (err) {
+      showDataMsg('❌ 导入失败：文件格式错误', false);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showDataMsg(text, isGood = true) {
+  const el = document.getElementById('dataMsg');
+  el.textContent = text;
+  el.style.color = isGood ? '#166534' : '#dc2626';
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// Event bindings
+const doOverlay = document.getElementById('dataMgrOverlay');
+doOverlay.addEventListener('click', (e) => { if (e.target === doOverlay) doOverlay.classList.remove('show'); });
+document.getElementById('dataMgrClose').addEventListener('click', () => doOverlay.classList.remove('show'));
+document.getElementById('dataMgrBtn').addEventListener('click', () => {
+  document.getElementById('dataMsg').style.display = 'none';
+  doOverlay.classList.add('show');
+});
+document.getElementById('exportBtn').addEventListener('click', exportData);
+document.getElementById('importFileInput').addEventListener('change', (e) => {
+  if (e.target.files.length > 0) {
+    importData(e.target.files[0]);
+    e.target.value = '';
+  }
+});
+document.getElementById('resetCompletedBtn').addEventListener('click', () => {
+  if (!confirm('确定重置所有完成记录？此操作不可撤销。')) return;
+  completedMap = new Map();
+  saveCompleted(completedMap);
+  pickedIds = new Set();
+  savePicked(pickedIds);
+  updatePickerStats();
+  refreshList();
+  renderHeatmap();
+  if (currentProblem) renderPickerProblem(currentProblem);
+  showDataMsg('✅ 完成记录已重置');
+});
+document.getElementById('resetAllBtn').addEventListener('click', () => {
+  if (!confirm('确定重置全部数据（完成记录 + 标签）？此操作不可撤销。')) return;
+  localStorage.removeItem('lcPickedIds');
+  localStorage.removeItem('lcCompleted');
+  localStorage.removeItem('lcTagDefs');
+  localStorage.removeItem('lcProblemTags');
+  pickedIds = new Set();
+  completedMap = new Map();
+  tagDefs = {};
+  problemTags = {};
+  updatePickerStats();
+  refreshList();
+  renderHeatmap();
+  buildTagFilterOptions();
+  renderTagMgr();
+  if (currentProblem) renderPickerProblem(currentProblem);
+  showDataMsg('✅ 全部数据已重置');
+});
+
 document.getElementById('tagMgrNewBtn').addEventListener('click', () => {
   const name = document.getElementById('tagMgrNewName').value.trim();
   if (!name) return;
