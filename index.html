@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeetCode 刷题追踪器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f5f5f5;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+    min-height: 100vh;
+    color: #333;
+  }
+  .app {
+    max-width: 800px;
+    width: 100%;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .header h1 { font-size: 22px; color: #1a1a1a; }
+  .header .subtitle { color: #888; font-size: 13px; margin-top: 4px; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: #e8e8e8;
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 16px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    color: #666;
+    transition: all 0.15s;
+  }
+  .tab.active {
+    background: white;
+    color: #1a1a1a;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .tab:not(.active):hover { color: #333; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Card base */
+  .card {
+    background: white;
+    border-radius: 14px;
+    padding: 28px 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 16px;
+  }
+
+  /* ====== Tab 1: Picker ====== */
+  .problem-card {
+    background: #fafafa;
+    border-radius: 12px;
+    padding: 32px 24px;
+    margin-bottom: 16px;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #eee;
+    text-align: center;
+  }
+  .problem-card.empty { color: #bbb; font-size: 15px; }
+  .problem-id { font-size: 14px; color: #999; margin-bottom: 6px; font-weight: 500; }
+  .problem-title { font-size: 20px; font-weight: 600; color: #1a1a1a; margin-bottom: 10px; }
+  .problem-tags { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 11px; font-weight: 500;
+  }
+  .tag.top100 { background: #e8f5e9; color: #2e7d32; }
+  .tag.top150 { background: #e3f2fd; color: #1565c0; }
+  .open-lc { color: #2563eb; font-size: 13px; text-decoration: none; }
+  .open-lc:hover { text-decoration: underline; }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    padding: 12px 28px; border: none; border-radius: 10px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: #2563eb; color: white; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-success { background: #16a34a; color: white; }
+  .btn-success:hover { background: #15803d; }
+  .btn-success:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+  .btn-secondary { background: #f0f0f0; color: #555; font-size: 13px; padding: 10px 20px; }
+  .btn-secondary:hover { background: #e0e0e0; }
+  .btn-outline {
+    background: transparent; border: 1px solid #ddd; color: #666;
+    font-size: 13px; padding: 8px 16px; border-radius: 8px;
+  }
+  .btn-outline:hover { background: #f5f5f5; }
+  .btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 6px; }
+
+  .filter-bar { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .filter-btn {
+    padding: 5px 14px; border: 1px solid #ddd; border-radius: 16px;
+    background: white; font-size: 12px; cursor: pointer; color: #666; transition: all 0.12s;
+  }
+  .filter-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+  .filter-btn:hover:not(.active) { background: #f5f5f5; }
+  .stats-row {
+    display: flex; gap: 16px; justify-content: center;
+    font-size: 13px; color: #888; margin-top: 16px; flex-wrap: wrap;
+  }
+  .stats-row strong { color: #333; }
+
+  .completed-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #dcfce7; color: #166534; padding: 3px 10px;
+    border-radius: 10px; font-size: 11px; font-weight: 500;
+  }
+
+  /* ====== Tab 2: Problem List ====== */
+  .list-toolbar {
+    display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .search-input {
+    flex: 1; min-width: 180px; padding: 10px 14px;
+    border: 1px solid #ddd; border-radius: 8px; font-size: 14px;
+    outline: none; transition: border 0.15s;
+  }
+  .search-input:focus { border-color: #2563eb; }
+  .list-filter select {
+    padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 13px; background: white; outline: none;
+  }
+  .list-stats {
+    font-size: 13px; color: #888; margin-bottom: 12px;
+  }
+  .list-stats strong { color: #333; }
+
+  .problem-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 8px; transition: background 0.1s;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .problem-row:hover { background: #fafafa; }
+  .problem-row.completed { opacity: 0.65; }
+  .problem-row .cb {
+    width: 20px; height: 20px; border-radius: 4px; border: 2px solid #ccc;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.12s;
+    background: white; font-size: 12px; color: white;
+  }
+  .problem-row .cb.checked {
+    background: #16a34a; border-color: #16a34a;
+  }
+  .problem-row .cb.checked::after { content: "✓"; }
+  .problem-row .cb:hover { border-color: #16a34a; }
+  .problem-row .p-id { font-size: 13px; color: #999; width: 48px; flex-shrink: 0; }
+  .problem-row .p-title {
+    flex: 1; font-size: 14px; color: #333;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .problem-row.completed .p-title { text-decoration: line-through; color: #aaa; }
+  .problem-row .p-tags {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    align-items: center; justify-content: flex-end;
+  }
+  .problem-row .p-tags .tag { font-size: 10px; padding: 1px 7px; }
+  .problem-row .p-tags .tag-badge { font-size: 10px; padding: 1px 7px; }
+  .no-result { text-align: center; color: #bbb; padding: 40px 0; font-size: 14px; }
+
+  /* ====== Tab 3: Heatmap ====== */
+  .heatmap-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+  }
+  .heatmap-header h3 { font-size: 16px; color: #333; }
+  .heatmap-header .hm-stats { font-size: 13px; color: #888; }
+
+  .heatmap-container {
+    overflow-x: auto; padding-bottom: 8px;
+  }
+  .heatmap-grid {
+    display: flex; gap: 3px;
+  }
+  .hm-col {
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .hm-cell {
+    width: 12px; height: 12px; border-radius: 2px;
+    background: #ebedf0; transition: background 0.1s;
+    cursor: default;
+  }
+  .hm-cell.l1 { background: #9be9a8; }
+  .hm-cell.l2 { background: #40c463; }
+  .hm-cell.l3 { background: #30a14e; }
+  .hm-cell.l4 { background: #216e39; }
+  .hm-cell.today { outline: 2px solid #2563eb; outline-offset: -1px; }
+
+  .hm-labels {
+    display: flex; font-size: 10px; color: #999; margin-bottom: 4px;
+  }
+  .hm-labels .hm-month { flex: 1; }
+  .hm-legend {
+    display: flex; align-items: center; gap: 4px; justify-content: flex-end;
+    font-size: 11px; color: #999; margin-top: 8px;
+  }
+  .hm-legend .hm-cell { width: 10px; height: 10px; }
+
+  .hm-tooltip {
+    position: fixed; background: #1a1a1a; color: white;
+    padding: 6px 10px; border-radius: 6px; font-size: 12px;
+    pointer-events: none; z-index: 100; display: none;
+    white-space: nowrap;
+  }
+
+  /* Scrollbar */
+  .problem-list-scroll {
+    max-height: 600px; overflow-y: auto;
+  }
+  .problem-list-scroll::-webkit-scrollbar { width: 6px; }
+  .problem-list-scroll::-webkit-scrollbar-track { background: transparent; }
+  .problem-list-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+
+  .message-bar {
+    background: #f0fdf4; color: #166534; font-size: 13px;
+    padding: 8px 14px; border-radius: 8px; margin-bottom: 12px;
+    display: none; text-align: center;
+  }
+  .message-bar.show { display: block; }
+
+  /* ====== Tags ====== */
+  .tag-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 500;
+    color: white; cursor: default; white-space: nowrap;
+  }
+  .tag-badge .del {
+    cursor: pointer; font-size: 12px; line-height: 1; opacity: 0.6;
+    margin-left: 2px;
+  }
+  .tag-badge .del:hover { opacity: 1; }
+  .tag-add-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 1px dashed #bbb; background: transparent;
+    color: #999; font-size: 14px; cursor: pointer; flex-shrink: 0;
+    transition: all 0.12s;
+  }
+  .tag-add-btn:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+
+  /* Tag Picker Overlay */
+  .picker-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,0.2); display: none;
+    align-items: center; justify-content: center;
+  }
+  .picker-overlay.show { display: flex; }
+  .picker-dialog {
+    background: white; border-radius: 12px; padding: 20px;
+    min-width: 300px; max-width: 420px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  }
+  .picker-dialog h3 { font-size: 15px; margin-bottom: 12px; color: #333; }
+  .picker-dialog .close {
+    float: right; border: none; background: none;
+    font-size: 20px; cursor: pointer; color: #999; line-height: 1;
+  }
+  .picker-dialog .close:hover { color: #333; }
+  .tag-opt {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    transition: background 0.1s;
+  }
+  .tag-opt:hover { background: #f5f5f5; }
+  .tag-opt .dot {
+    width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
+  }
+  .tag-opt .name { flex: 1; font-size: 13px; color: #333; }
+  .tag-opt .check { color: #16a34a; font-size: 14px; visibility: hidden; }
+  .tag-opt .check.show { visibility: visible; }
+  .picker-dialog .new-tag-row {
+    display: flex; gap: 8px; margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid #eee;
+  }
+  .picker-dialog .new-tag-row input {
+    flex: 1; padding: 8px 10px; border: 1px solid #ddd;
+    border-radius: 6px; font-size: 13px; outline: none;
+  }
+  .picker-dialog .new-tag-row input:focus { border-color: #2563eb; }
+  .picker-dialog .new-tag-row input.cp {
+    width: 36px; flex: none; padding: 2px; cursor: pointer;
+  }
+  .picker-dialog .new-tag-row button {
+    padding: 8px 16px; border: none; border-radius: 6px;
+    background: #2563eb; color: white; font-size: 13px;
+    font-weight: 500; cursor: pointer;
+  }
+  .picker-dialog .new-tag-row button:hover { background: #1d4ed8; }
+
+  /* Tag Manager */
+  .mgr-overlay {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(0,0,0,0.3); display: none;
+    align-items: center; justify-content: center;
+  }
+  .mgr-overlay.show { display: flex; }
+  .mgr-dialog {
+    background: white; border-radius: 14px; padding: 24px;
+    min-width: 360px; max-width: 460px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  }
+  .mgr-dialog h3 { font-size: 16px; margin-bottom: 16px; color: #333; }
+  .mgr-dialog .close {
+    float: right; border: none; background: none;
+    font-size: 20px; cursor: pointer; color: #999; line-height: 1;
+  }
+  .mgr-dialog .close:hover { color: #333; }
+  .mgr-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .mgr-item:last-child { border-bottom: none; }
+  .mgr-item .preview {
+    padding: 2px 10px; border-radius: 8px; font-size: 12px; font-weight: 500;
+    color: white;
+  }
+  .mgr-item .tname { flex: 1; font-size: 13px; color: #333; }
+  .mgr-item .tcount { font-size: 11px; color: #999; margin-right: 8px; }
+  .mgr-item .del-btn {
+    border: none; background: none; color: #ccc; cursor: pointer;
+    font-size: 16px; padding: 2px 4px; border-radius: 4px;
+  }
+  .mgr-item .del-btn:hover { color: #dc2626; background: #fef2f2; }
+  .mgr-dialog .create-area {
+    display: flex; gap: 8px; margin-top: 16px;
+  }
+  .mgr-dialog .create-area input {
+    flex: 1; padding: 8px 10px; border: 1px solid #ddd;
+    border-radius: 6px; font-size: 13px; outline: none;
+  }
+  .mgr-dialog .create-area input:focus { border-color: #2563eb; }
+  .mgr-dialog .create-area input[type="color"] { width: 36px; flex: none; padding: 2px; cursor: pointer; }
+  .mgr-dialog .create-area button {
+    padding: 8px 16px; border: none; border-radius: 6px;
+    background: #16a34a; color: white; font-size: 13px;
+    font-weight: 500; cursor: pointer;
+  }
+  .mgr-dialog .create-area button:hover { background: #15803d; }
+  .mgr-dialog .empty-msg { text-align: center; color: #bbb; padding: 24px 0; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>🎯 LeetCode 刷题追踪器</h1>
+    <div class="subtitle">Top 100 Liked × Top Interview 150 · 182 题</div>
+  </div>
+
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn btn-outline btn-sm" id="tagMgrBtn" style="margin-left:auto">🏷️ 标签管理</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="picker">🎲 抽题</button>
+    <button class="tab" data-tab="list">📋 题库</button>
+    <button class="tab" data-tab="heatmap">🔥 热力图</button>
+  </div>
+
+  <div class="message-bar" id="msgBar"></div>
+
+  <!-- ====== PICKER PANEL ====== -->
+  <div class="panel active" id="panel-picker">
+    <div class="card">
+      <div class="filter-bar" id="pickerFilters">
+        <button class="filter-btn active" data-filter="all">全部</button>
+        <button class="filter-btn" data-filter="top100">💚 Top 100</button>
+        <button class="filter-btn" data-filter="top150">💙 Top 150</button>
+        <button class="filter-btn" data-filter="both">💜 重叠</button>
+      </div>
+
+      <div class="problem-card empty" id="card">
+        <div>点击下方按钮抽题</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="pickBtn">🎲 随机抽题</button>
+        <button class="btn btn-success" id="doneBtn" disabled>✅ 标记完成</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-secondary" id="resetPickedBtn">🔄 重置已抽</button>
+      </div>
+
+      <div class="stats-row" id="pickerStats">
+        <span>总题: <strong id="ptTotal">0</strong></span>
+        <span>未完成: <strong id="ptUndone">0</strong></span>
+        <span>已完成: <strong id="ptDone">0</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== LIST PANEL ====== -->
+  <div class="panel" id="panel-list">
+    <div class="card">
+      <div class="card-title">📋 全部题目</div>
+      <div class="list-toolbar">
+        <input class="search-input" id="searchInput" type="text" placeholder="搜索题目、编号…">
+        <div class="list-filter">
+          <select id="listFilter">
+            <option value="all">全部</option>
+            <option value="pending">未完成</option>
+            <option value="done">已完成</option>
+            <option value="top100">💚 Top 100</option>
+            <option value="top150">💙 Top 150</option>
+            <option value="both">💜 重叠</option>
+            <option value="tag" disabled>── 自定义标签 ──</option>
+          </select>
+        </div>
+      </div>
+      <div class="list-stats" id="listStats">显示 0 / 0 题</div>
+      <div class="problem-list-scroll" id="problemList"></div>
+    </div>
+  </div>
+
+  <!-- ====== HEATMAP PANEL ====== -->
+  <div class="panel" id="panel-heatmap">
+    <div class="card">
+      <div class="heatmap-header">
+        <h3>📅 刷题热力图</h3>
+        <div class="hm-stats" id="hmStats">总完成: 0 题</div>
+      </div>
+      <div class="heatmap-container" id="heatmapContainer"></div>
+      <div class="hm-legend">
+        <span>少</span>
+        <span class="hm-cell"></span>
+        <span class="hm-cell l1"></span>
+        <span class="hm-cell l2"></span>
+        <span class="hm-cell l3"></span>
+        <span class="hm-cell l4"></span>
+        <span>多</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hm-tooltip" id="hmTooltip"></div>
+</div>
+
+<!-- ====== Tag Picker Overlay ====== -->
+<div class="picker-overlay" id="tagPickerOverlay">
+  <div class="picker-dialog">
+    <button class="close" id="tagPickerClose">&times;</button>
+    <h3>🏷️ 选择标签 — <span id="tagPickerProblemTitle" style="font-weight:400"></span></h3>
+    <div id="tagPickerList"></div>
+    <div class="new-tag-row">
+      <input id="tagPickerNewName" type="text" placeholder="新标签名…">
+      <input id="tagPickerNewColor" class="cp" type="color" value="#f97316">
+      <button id="tagPickerNewBtn">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Tag Manager Overlay ====== -->
+<div class="mgr-overlay" id="tagMgrOverlay">
+  <div class="mgr-dialog">
+    <button class="close" id="tagMgrClose">&times;</button>
+    <h3>🏷️ 标签管理</h3>
+    <div id="tagMgrList"></div>
+    <div class="create-area">
+      <input id="tagMgrNewName" type="text" placeholder="新标签名…">
+      <input id="tagMgrNewColor" type="color" value="#f97316">
+      <button id="tagMgrNewBtn">创建</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+// ====== DATA ======
+const allProblems = LC_PROBLEMS;
+function localYMD(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+const todayStr = () => localYMD(new Date());
+
+// Load persisted state
+function loadPicked() {
+  return new Set(JSON.parse(localStorage.getItem('lcPickedIds') || '[]'));
+}
+function savePicked(set) {
+  localStorage.setItem('lcPickedIds', JSON.stringify([...set]));
+}
+function loadCompleted() {
+  // returns Map: problemId -> dateString
+  const raw = JSON.parse(localStorage.getItem('lcCompleted') || '{}');
+  return new Map(Object.entries(raw).map(([k,v]) => [parseInt(k), v]));
+}
+function saveCompleted(map) {
+  const obj = {};
+  for (const [k, v] of map) obj[k] = v;
+  localStorage.setItem('lcCompleted', JSON.stringify(obj));
+}
+
+let pickedIds = loadPicked();
+let completedMap = loadCompleted(); // id -> date string
+let tagPickerProblemId = null;
+
+// ====== TAG DATA ======
+function loadTags() {
+  const raw = JSON.parse(localStorage.getItem('lcTagDefs') || '{}');
+  // raw: { tagId: { id, name, color } }
+  return raw;
+}
+function saveTags(obj) {
+  localStorage.setItem('lcTagDefs', JSON.stringify(obj));
+}
+function loadProblemTags() {
+  const raw = JSON.parse(localStorage.getItem('lcProblemTags') || '{}');
+  // raw: { "1": ["tagId1", "tagId2"], ... }
+  return raw;
+}
+function saveProblemTags(obj) {
+  localStorage.setItem('lcProblemTags', JSON.stringify(obj));
+}
+
+let tagDefs = loadTags();         // { id: { id, name, color } }
+let problemTags = loadProblemTags(); // { problemId: [tagId, ...] }
+
+function genTagId() { return 't' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
+
+function getProblemTags(pid) {
+  return (problemTags[pid] || []).map(id => tagDefs[id]).filter(Boolean);
+}
+function addTagToProblem(pid, tagId) {
+  if (!tagDefs[tagId]) return;
+  if (!problemTags[pid]) problemTags[pid] = [];
+  if (!problemTags[pid].includes(tagId)) {
+    problemTags[pid].push(tagId);
+    saveProblemTags(problemTags);
+  }
+}
+function removeTagFromProblem(pid, tagId) {
+  if (!problemTags[pid]) return;
+  problemTags[pid] = problemTags[pid].filter(id => id !== tagId);
+  saveProblemTags(problemTags);
+}
+function countTagUsage(tagId) {
+  let n = 0;
+  for (const pid in problemTags) {
+    if (problemTags[pid].includes(tagId)) n++;
+  }
+  return n;
+}
+
+// ====== HELPERS ======
+function getFiltered(filter) {
+  switch (filter) {
+    case 'top100': return allProblems.filter(p => p.in.includes('Top 100'));
+    case 'top150': return allProblems.filter(p => p.in.includes('Top 150'));
+    case 'both':   return allProblems.filter(p => p.in.length > 1);
+    default:       return allProblems;
+  }
+}
+function showMsg(text, isGood = true) {
+  const bar = document.getElementById('msgBar');
+  bar.textContent = text;
+  bar.style.background = isGood ? '#f0fdf4' : '#fef2f2';
+  bar.style.color = isGood ? '#166534' : '#991b1b';
+  bar.classList.add('show');
+  setTimeout(() => bar.classList.remove('show'), 2500);
+}
+
+// ====== TAB 1: PICKER ======
+let currentFilter = 'all';
+let currentProblem = null; // the last picked problem
+
+function updatePickerStats() {
+  const filtered = getFiltered(currentFilter);
+  const done = filtered.filter(p => completedMap.has(p.id));
+  document.getElementById('ptTotal').textContent = filtered.length;
+  document.getElementById('ptUndone').textContent = filtered.length - done.length;
+  document.getElementById('ptDone').textContent = done.length;
+}
+
+function renderPickerProblem(problem) {
+  const card = document.getElementById('card');
+  currentProblem = problem;
+  if (!problem) {
+    card.className = 'problem-card empty';
+    card.innerHTML = '<div>点击下方按钮抽题</div>';
+    document.getElementById('doneBtn').disabled = true;
+    return;
+  }
+  card.className = 'problem-card';
+  const tags = (problem.in || []).map(t => {
+    const cls = t === 'Top 100' ? 'top100' : 'top150';
+    return `<span class="tag ${cls}">${t}</span>`;
+  }).join('');
+  const isDone = completedMap.has(problem.id);
+  const badge = isDone ? '<span class="completed-badge">✅ 已完成</span>' : '';
+  const lcUrl = `https://leetcode.com/problems/${problem.slug}/`;
+  const userTags = getProblemTags(problem.id);
+  const tagBadges = userTags.map(t =>
+    `<span class="tag-badge" style="background:${t.color}">${t.name}</span>`
+  ).join('');
+  card.innerHTML = `
+    <div class="problem-id">#${problem.id}</div>
+    <div class="problem-title">${problem.title}</div>
+    <div class="problem-tags">${tags} ${tagBadges} ${badge}</div>
+    <a class="open-lc" href="${lcUrl}" target="_blank">↗ 在 LeetCode 上打开</a>
+  `;
+  document.getElementById('doneBtn').disabled = isDone;
+}
+
+function pickRandom() {
+  const filtered = getFiltered(currentFilter);
+  const undone = filtered.filter(p => !completedMap.has(p.id));
+  if (undone.length === 0) {
+    document.getElementById('card').className = 'problem-card empty';
+    document.getElementById('card').innerHTML = '<div>🎉 全部完成啦！🎊</div>';
+    currentProblem = null;
+    document.getElementById('doneBtn').disabled = true;
+    return;
+  }
+  const picked = undone[Math.floor(Math.random() * undone.length)];
+  // 标记为"已抽到"（仅用于记忆最近抽过哪些，不限制抽题范围）
+  pickedIds.add(picked.id);
+  savePicked(pickedIds);
+  renderPickerProblem(picked);
+  updatePickerStats();
+}
+
+function markCurrentDone() {
+  if (!currentProblem || completedMap.has(currentProblem.id)) return;
+  const today = todayStr();
+  completedMap.set(currentProblem.id, today);
+  saveCompleted(completedMap);
+  renderPickerProblem(currentProblem);
+  updatePickerStats();
+  refreshList();
+  renderHeatmap();
+  showMsg(`✅ #${currentProblem.id} ${currentProblem.title} 已完成！`);
+}
+
+function resetPicked() {
+  pickedIds = new Set();
+  savePicked(pickedIds);
+  currentProblem = null;
+  renderPickerProblem(null);
+  updatePickerStats();
+  showMsg('🔄 已抽记录已重置');
+}
+
+// ====== TAB 2: LIST ======
+let listFilter = 'all';
+let tagFilterId = null;
+let searchQuery = '';
+
+function getFilteredList() {
+  let list = [...allProblems];
+
+  // Source filter
+  switch (listFilter) {
+    case 'pending': list = list.filter(p => !completedMap.has(p.id)); break;
+    case 'done':    list = list.filter(p => completedMap.has(p.id)); break;
+    case 'top100':  list = list.filter(p => p.in.includes('Top 100')); break;
+    case 'top150':  list = list.filter(p => p.in.includes('Top 150')); break;
+    case 'both':    list = list.filter(p => p.in.length > 1); break;
+  }
+
+  // Tag filter
+  if (listFilter === 'tag' && tagFilterId) {
+    list = list.filter(p => problemTags[p.id] && problemTags[p.id].includes(tagFilterId));
+  }
+
+  // Search
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    list = list.filter(p =>
+      p.title.toLowerCase().includes(q) ||
+      String(p.id).includes(q)
+    );
+  }
+
+  return list;
+}
+
+function refreshList() {
+  const list = getFilteredList();
+  const container = document.getElementById('problemList');
+  document.getElementById('listStats').textContent =
+    `显示 ${list.length} / ${allProblems.length} 题（已完成 ${completedMap.size}）`;
+
+  if (list.length === 0) {
+    container.innerHTML = '<div class="no-result">没有匹配的题目</div>';
+    return;
+  }
+
+  container.innerHTML = list.map(p => {
+    const done = completedMap.has(p.id);
+    const srcTags = (p.in || []).map(t =>
+      `<span class="tag ${t === 'Top 100' ? 'top100' : 'top150'}">${t}</span>`
+    ).join('');
+    const userTags = getProblemTags(p.id);
+    const tagBadges = userTags.map(t =>
+      `<span class="tag-badge" style="background:${t.color}">${t.name}<span class="del" data-pid="${p.id}" data-tid="${t.id}">&times;</span></span>`
+    ).join('');
+    const addBtn = `<span class="tag-add-btn" data-pid="${p.id}">+</span>`;
+    const lcUrl = `https://leetcode.com/problems/${p.slug}/`;
+    return `<div class="problem-row ${done ? 'completed' : ''}" data-id="${p.id}">
+      <div class="cb ${done ? 'checked' : ''}" data-id="${p.id}"></div>
+      <span class="p-id">#${p.id}</span>
+      <span class="p-title"><a href="${lcUrl}" target="_blank" style="color:inherit;text-decoration:none">${p.title}</a></span>
+      <span class="p-tags">${srcTags}${tagBadges}${addBtn}</span>
+    </div>`;
+  }).join('');
+}
+
+function toggleComplete(id) {
+  if (completedMap.has(id)) {
+    completedMap.delete(id);
+  } else {
+    completedMap.set(id, todayStr());
+  }
+  saveCompleted(completedMap);
+  refreshList();
+  updatePickerStats();
+  renderHeatmap();
+
+  // If current picked problem was toggled, update the card
+  if (currentProblem && currentProblem.id === id) {
+    renderPickerProblem(currentProblem);
+  }
+}
+
+// ====== TAB 3: HEATMAP ======
+function renderHeatmap() {
+  const container = document.getElementById('heatmapContainer');
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // 从今年 1 月 1 日到今天
+  const startDate = new Date(today.getFullYear(), 0, 1);
+  const endDate = new Date(today);
+
+  // 统计每天完成数
+  const dayCount = new Map();
+  for (const [, dateStr] of completedMap) {
+    if (dateStr >= localYMD(startDate)) {
+      dayCount.set(dateStr, (dayCount.get(dateStr) || 0) + 1);
+    }
+  }
+
+  // 把 startDate 退到最近的周日
+  const gridStart = new Date(startDate);
+  const dow = gridStart.getDay();
+  if (dow > 0) gridStart.setDate(gridStart.getDate() - dow);
+
+  // 按周构建列
+  const cols = [];
+  let cursor = new Date(gridStart);
+
+  while (cursor <= endDate) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      const dateStr = localYMD(cursor);
+      const count = dayCount.get(dateStr) || 0;
+      const isInRange = cursor >= startDate && cursor <= endDate;
+      let level = 0;
+      if (count > 0) level = count >= 4 ? 4 : count >= 3 ? 3 : count >= 2 ? 2 : 1;
+      week.push({
+        date: dateStr,
+        count,
+        level: isInRange ? level : -1,
+        isToday: dateStr === todayStr(),
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    cols.push(week);
+  }
+
+  // 计算月份标签位置
+  const monthLabels = [];
+  let lastMonth = -1;
+  for (let i = 0; i < cols.length; i++) {
+    // 该列第一个有效日期
+    const firstCell = cols[i].find(c => c.level >= 0);
+    if (!firstCell) continue;
+    const m = new Date(firstCell.date + 'T00:00:00').getMonth();
+    if (m !== lastMonth) {
+      monthLabels.push({ col: i, label: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'][m] });
+      lastMonth = m;
+    }
+  }
+
+  const CELL = 12, GAP = 3, STEP = CELL + GAP;
+
+  // 渲染
+  let html = '<div style="position:relative;height:18px;margin-bottom:4px;font-size:10px;color:#999">';
+  for (const m of monthLabels) {
+    html += `<span style="position:absolute;left:${m.col * STEP}px">${m.label}</span>`;
+  }
+  html += '</div>';
+
+  html += '<div class="heatmap-grid">';
+  for (const week of cols) {
+    html += '<div class="hm-col">';
+    for (const cell of week) {
+      if (cell.level < 0) {
+        html += '<div style="width:12px;height:12px"></div>';
+      } else {
+        const lvl = cell.level > 0 ? `l${cell.level}` : '';
+        const tdy = cell.isToday ? ' today' : '';
+        html += `<div class="hm-cell ${lvl}${tdy}" data-date="${cell.date}" data-count="${cell.count}"></div>`;
+      }
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
+
+  // Tooltip
+  const tooltip = document.getElementById('hmTooltip');
+  container.querySelectorAll('.hm-cell[data-date]').forEach(el => {
+    el.addEventListener('mouseenter', (e) => {
+      const date = el.dataset.date;
+      const count = parseInt(el.dataset.count);
+      const parts = date.split('-');
+      const display = `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+      tooltip.textContent = count > 0 ? `${display} · 完成 ${count} 题` : `${display} · 未刷题`;
+      tooltip.style.display = 'block';
+    });
+    el.addEventListener('mousemove', (e) => {
+      tooltip.style.left = (e.clientX + 12) + 'px';
+      tooltip.style.top = (e.clientY - 10) + 'px';
+    });
+    el.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  });
+
+  const total = completedMap.size;
+  const streak = calcStreak();
+  document.getElementById('hmStats').textContent =
+    `总完成: ${total} 题 · 当前连续: ${streak} 天`;
+}
+
+function calcStreak() {
+  // Count consecutive days ending today (or yesterday if today none)
+  const dates = [...completedMap.values()].sort().reverse();
+  if (dates.length === 0) return 0;
+
+  let streak = 0;
+  const today = todayStr();
+  let checkDate = new Date();
+  // Check if today has completions
+  const hasToday = dates[0] === today;
+  if (!hasToday) {
+    // Check yesterday
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+  let checkStr = localYMD(checkDate);
+
+  for (const d of dates) {
+    if (d === checkStr) {
+      streak++;
+      const prev = new Date(checkDate);
+      prev.setDate(prev.getDate() - 1);
+      checkDate = prev;
+      checkStr = localYMD(checkDate);
+    } else if (d < checkStr) {
+      break;
+    }
+  }
+  return streak;
+}
+
+// ====== EVENT BINDINGS ======
+
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'heatmap') renderHeatmap();
+    if (tab.dataset.tab === 'list') refreshList();
+  });
+});
+
+// Tag Picker
+const tpOverlay = document.getElementById('tagPickerOverlay');
+tpOverlay.addEventListener('click', (e) => {
+  if (e.target === tpOverlay) closeTagPicker();
+});
+document.getElementById('tagPickerClose').addEventListener('click', closeTagPicker);
+document.getElementById('tagPickerList').addEventListener('click', (e) => {
+  const opt = e.target.closest('.tag-opt');
+  if (!opt) return;
+  const tid = opt.dataset.tid;
+  const pid = tagPickerProblemId;
+  if (!pid) return;
+  const current = problemTags[pid] || [];
+  if (current.includes(tid)) {
+    removeTagFromProblem(pid, tid);
+  } else {
+    addTagToProblem(pid, tid);
+  }
+  renderTagPicker();
+  refreshList();
+  if (currentProblem && currentProblem.id === pid) renderPickerProblem(currentProblem);
+});
+document.getElementById('tagPickerNewBtn').addEventListener('click', () => {
+  const name = document.getElementById('tagPickerNewName').value.trim();
+  if (!name) return;
+  const color = document.getElementById('tagPickerNewColor').value;
+  const id = genTagId();
+  tagDefs[id] = { id, name, color };
+  saveTags(tagDefs);
+  document.getElementById('tagPickerNewName').value = '';
+  renderTagPicker();
+  renderTagMgr();
+  buildTagFilterOptions();
+});
+
+// Tag Manager
+const mgrOverlay = document.getElementById('tagMgrOverlay');
+mgrOverlay.addEventListener('click', (e) => {
+  if (e.target === mgrOverlay) closeTagMgr();
+});
+document.getElementById('tagMgrClose').addEventListener('click', closeTagMgr);
+document.getElementById('tagMgrBtn').addEventListener('click', openTagMgr);
+document.getElementById('tagMgrList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.del-btn');
+  if (!btn) return;
+  const tid = btn.dataset.tid;
+  if (!confirm(`确定删除标签「${tagDefs[tid]?.name}」？`)) return;
+  // Remove from all problems
+  for (const pid in problemTags) {
+    problemTags[pid] = problemTags[pid].filter(id => id !== tid);
+  }
+  saveProblemTags(problemTags);
+  delete tagDefs[tid];
+  saveTags(tagDefs);
+  renderTagMgr();
+  buildTagFilterOptions();
+  refreshList();
+  if (currentProblem) renderPickerProblem(currentProblem);
+});
+document.getElementById('tagMgrNewBtn').addEventListener('click', () => {
+  const name = document.getElementById('tagMgrNewName').value.trim();
+  if (!name) return;
+  const color = document.getElementById('tagMgrNewColor').value;
+  const id = genTagId();
+  tagDefs[id] = { id, name, color };
+  saveTags(tagDefs);
+  document.getElementById('tagMgrNewName').value = '';
+  renderTagMgr();
+  buildTagFilterOptions();
+});
+
+// Click on tag add / del buttons in problem list
+// (delegated through problemList which is a parent element)
+document.getElementById('problemList').addEventListener('click', (e) => {
+  // Add button
+  const addBtn = e.target.closest('.tag-add-btn');
+  if (addBtn) {
+    const pid = parseInt(addBtn.dataset.pid);
+    openTagPicker(pid);
+    return;
+  }
+  // Delete badge
+  const del = e.target.closest('.del');
+  if (del) {
+    e.stopPropagation();
+    const pid = parseInt(del.dataset.pid);
+    const tid = del.dataset.tid;
+    removeTagFromProblem(pid, tid);
+    refreshList();
+    if (currentProblem && currentProblem.id === pid) renderPickerProblem(currentProblem);
+    return;
+  }
+});
+
+// Picker
+document.getElementById('pickBtn').addEventListener('click', pickRandom);
+document.getElementById('doneBtn').addEventListener('click', markCurrentDone);
+document.getElementById('resetPickedBtn').addEventListener('click', resetPicked);
+
+document.querySelectorAll('#pickerFilters .filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#pickerFilters .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    updatePickerStats();
+    const card = document.getElementById('card');
+    card.className = 'problem-card empty';
+    card.innerHTML = '<div>切换了筛选，重新抽题</div>';
+    currentProblem = null;
+    document.getElementById('doneBtn').disabled = true;
+  });
+});
+
+// ====== TAG PICKER ======
+function openTagPicker(pid) {
+  tagPickerProblemId = pid;
+  const p = allProblems.find(x => x.id === pid);
+  document.getElementById('tagPickerProblemTitle').textContent = p ? `#${p.id} ${p.title}` : '';
+  renderTagPicker();
+  document.getElementById('tagPickerOverlay').classList.add('show');
+}
+function closeTagPicker() {
+  document.getElementById('tagPickerOverlay').classList.remove('show');
+  tagPickerProblemId = null;
+}
+function renderTagPicker() {
+  const pid = tagPickerProblemId;
+  if (!pid) return;
+  const current = problemTags[pid] || [];
+  const list = document.getElementById('tagPickerList');
+  const ids = Object.keys(tagDefs);
+  if (ids.length === 0) {
+    list.innerHTML = '<div style="color:#bbb;text-align:center;padding:16px 0;font-size:13px">还没有标签，在下方创建</div>';
+    return;
+  }
+  list.innerHTML = ids.map(id => {
+    const t = tagDefs[id];
+    const checked = current.includes(id);
+    return `<div class="tag-opt" data-tid="${id}">
+      <span class="dot" style="background:${t.color}"></span>
+      <span class="name">${t.name}</span>
+      <span class="check ${checked ? 'show' : ''}">✓</span>
+    </div>`;
+  }).join('');
+}
+
+// ====== TAG MANAGER ======
+function openTagMgr() {
+  renderTagMgr();
+  document.getElementById('tagMgrOverlay').classList.add('show');
+}
+function closeTagMgr() {
+  document.getElementById('tagMgrOverlay').classList.remove('show');
+}
+function buildTagFilterOptions() {
+  const sel = document.getElementById('listFilter');
+  // Remove old tag options
+  const old = sel.querySelectorAll('.tag-opt-group');
+  old.forEach(el => el.remove());
+  const ids = Object.keys(tagDefs);
+  if (ids.length === 0) return;
+  const group = document.createElement('optgroup');
+  group.className = 'tag-opt-group';
+  group.label = '🏷️ 自定义标签';
+  ids.forEach(id => {
+    const opt = document.createElement('option');
+    opt.value = 'tag:' + id;
+    opt.textContent = '🏷 ' + tagDefs[id].name;
+    group.appendChild(opt);
+  });
+  sel.appendChild(group);
+}
+function renderTagMgr() {
+  const list = document.getElementById('tagMgrList');
+  const ids = Object.keys(tagDefs);
+  if (ids.length === 0) {
+    list.innerHTML = '<div class="empty-msg">还没有标签，创建一个吧</div>';
+    return;
+  }
+  list.innerHTML = ids.map(id => {
+    const t = tagDefs[id];
+    const count = countTagUsage(id);
+    return `<div class="mgr-item">
+      <span class="preview" style="background:${t.color}">${t.name}</span>
+      <span class="tname">${t.name}</span>
+      <span class="tcount">${count} 题</span>
+      <button class="del-btn" data-tid="${id}">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+// ====== EVENT BINDINGS ======
+
+// List
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  searchQuery = e.target.value;
+  refreshList();
+});
+document.getElementById('listFilter').addEventListener('change', (e) => {
+  const val = e.target.value;
+  if (val.startsWith('tag:')) {
+    listFilter = 'tag';
+    tagFilterId = val.slice(4);
+  } else {
+    listFilter = val;
+    tagFilterId = null;
+  }
+  refreshList();
+});
+document.getElementById('problemList').addEventListener('click', (e) => {
+  const cb = e.target.closest('.cb');
+  if (cb) {
+    toggleComplete(parseInt(cb.dataset.id));
+  }
+});
+
+// ====== INIT ======
+updatePickerStats();
+renderHeatmap();
+refreshList();
+buildTagFilterOptions();
+</script>
+</body>
+</html>
