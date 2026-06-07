@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- RLS（个人单用户项目：允许 anon 读写；anon key 仅放 config.js，不提交 git）
+-- RLS（个人单用户项目：允许 anon 读写；anon key 放 config.js）
 ALTER TABLE tag_defs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE problem_tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE completed ENABLE ROW LEVEL SECURITY;

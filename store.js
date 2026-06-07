@@ -1,5 +1,5 @@
 /**
- * 数据层：localStorage 缓存优先 + Supabase 异步同步
+ * 数据层：云端为准 + localStorage 仅作 API 不可用时的兜底缓存
  */
 (function (global) {
   const KEYS = {
@@ -11,7 +11,7 @@
   };
 
   let supabase = null;
-  let syncStatus = 'no-config';
+  let syncStatus = 'syncing';
   let onStatusChange = null;
 
   let tagDefs = {};
@@ -28,7 +28,7 @@
 
   const PUSH_DEBOUNCE_MS = 400;
   const NOTE_PUSH_DEBOUNCE_MS = 300;
-  const PULL_INTERVAL_MS = 15000;
+  const PULL_INTERVAL_MS = 5000;
 
   function localYMD(d) {
     const y = d.getFullYear();
@@ -144,9 +144,16 @@
     }));
   }
 
+  function canWrite() {
+    return !!supabase;
+  }
+
   async function pullFromCloud() {
     if (!supabase) return false;
     try {
+      const meta = loadSyncMeta();
+      if (meta.pendingOps.length > 0) return false;
+
       const [tagsRes, ptRes, compRes, pickRes, metaRes] = await Promise.all([
         supabase.from('tag_defs').select('*'),
         supabase.from('problem_tags').select('*'),
@@ -161,31 +168,13 @@
       if (pickRes.error) throw pickRes.error;
 
       const cloudUpdatedAt = metaRes.data?.updated_at || null;
-      const meta = loadSyncMeta();
-
-      if ((meta.pendingOps || []).length > 0) {
-        return false;
-      }
-
-      const cloudHasData =
-        (tagsRes.data && tagsRes.data.length > 0) ||
-        (compRes.data && compRes.data.length > 0) ||
-        (ptRes.data && ptRes.data.length > 0);
-
-      const localHasData =
-        Object.keys(tagDefs).length > 0 ||
-        completedMap.size > 0 ||
-        Object.keys(problemTags).length > 0;
-
-      if (cloudHasData || !localHasData) {
-        applyCloudSnapshot(
-          tagsRes.data,
-          ptRes.data,
-          compRes.data,
-          pickRes.data,
-          cloudUpdatedAt
-        );
-      }
+      applyCloudSnapshot(
+        tagsRes.data,
+        ptRes.data,
+        compRes.data,
+        pickRes.data,
+        cloudUpdatedAt
+      );
       return true;
     } catch (e) {
       console.warn('pullFromCloud failed', e);
@@ -260,6 +249,7 @@
         cloudUpdatedAt: now,
         pendingOps: [],
       });
+      persistCache();
       setStatus('synced');
       return true;
     } catch (e) {
@@ -295,6 +285,7 @@
   }
 
   function persistAndSync() {
+    if (!canWrite()) return;
     markLocalDirty();
     persistCache();
     schedulePush();
@@ -304,13 +295,17 @@
     if (onDataChange) onDataChange();
   }
 
-  function startPeriodicPull() {
+  function startPeriodicSync() {
     if (!supabase) return;
     clearInterval(pullTimer);
     pullTimer = setInterval(async () => {
       if (typeof document !== 'undefined' && document.hidden) return;
       const meta = loadSyncMeta();
-      if (meta.pendingOps.length > 0) return;
+      if (meta.pendingOps.length > 0) {
+        const pushed = await pushToCloud();
+        if (pushed) notifyDataChange();
+        return;
+      }
       const pulled = await pullFromCloud();
       if (pulled) {
         setStatus('synced');
@@ -319,21 +314,18 @@
     }, PULL_INTERVAL_MS);
   }
 
-  async function flushPendingOps() {
-    const meta = loadSyncMeta();
-    if (!meta.pendingOps.length) return true;
-    return pushToCloud();
-  }
-
   async function init() {
-    loadFromCache();
     const cfg = global.CONFIG;
     if (!cfg || !cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
-      setStatus('no-config');
+      loadFromCache();
+      setStatus('error');
+      notifyDataChange();
       return;
     }
     if (!global.supabase || !global.supabase.createClient) {
-      setStatus('no-config');
+      loadFromCache();
+      setStatus('error');
+      notifyDataChange();
       return;
     }
 
@@ -342,26 +334,32 @@
 
     const meta = loadSyncMeta();
     if (meta.pendingOps.length > 0) {
+      loadFromCache();
       const pushed = await pushToCloud();
       if (!pushed) {
-        setStatus('offline');
+        notifyDataChange();
+        startPeriodicSync();
         return;
       }
     }
 
     const pulled = await pullFromCloud();
-    setStatus(pulled ? 'synced' : 'offline');
-
-    if (!pulled && meta.pendingOps.length === 0) {
-      schedulePush();
+    if (pulled) {
+      setStatus('synced');
+      notifyDataChange();
+    } else {
+      loadFromCache();
+      setStatus('offline');
+      notifyDataChange();
     }
 
-    startPeriodicPull();
+    startPeriodicSync();
   }
 
   const store = {
     init,
     todayStr,
+    canWrite,
     getSyncStatus: () => syncStatus,
     setOnStatusChange(fn) {
       onStatusChange = fn;
@@ -375,11 +373,8 @@
     getCompleted: () => completedMap,
     getPickedIds: () => pickedIds,
 
-    reloadFromMemory() {
-      loadFromCache();
-    },
-
     saveTags(obj) {
+      if (!canWrite()) return;
       tagDefs = {};
       for (const [id, t] of Object.entries(obj)) {
         tagDefs[id] = normalizeTagDef({ ...t, id });
@@ -388,22 +383,25 @@
     },
 
     saveProblemTags(obj) {
+      if (!canWrite()) return;
       problemTags = obj;
       persistAndSync();
     },
 
     saveCompleted(map) {
+      if (!canWrite()) return;
       completedMap = map;
       persistAndSync();
     },
 
     savePickedIds(set) {
+      if (!canWrite()) return;
       pickedIds = set;
       persistAndSync();
     },
 
     saveTagNote(tagId, noteMd) {
-      if (!tagDefs[tagId]) return;
+      if (!canWrite() || !tagDefs[tagId]) return;
       tagDefs[tagId].noteMd = noteMd;
       tagDefs[tagId].noteUpdatedAt = todayStr();
       markLocalDirty();
@@ -415,6 +413,7 @@
     },
 
     importFromJson(data) {
+      if (!canWrite()) return;
       if (data.lcPickedIds) pickedIds = new Set(data.lcPickedIds);
       if (data.lcCompleted) {
         completedMap = new Map(
@@ -449,12 +448,14 @@
     },
 
     resetCompleted() {
+      if (!canWrite()) return;
       completedMap = new Map();
       pickedIds = new Set();
       persistAndSync();
     },
 
     resetAll() {
+      if (!canWrite()) return;
       pickedIds = new Set();
       completedMap = new Map();
       tagDefs = {};
