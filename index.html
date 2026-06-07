@@ -742,7 +742,6 @@ function syncFromStore() {
 function savePicked(set) { return store.savePickedIds(set).then(() => syncFromStore()); }
 function saveCompleted(map) { return store.saveCompleted(map).then(() => syncFromStore()); }
 function saveTags(obj) { return store.saveTags(obj).then(() => syncFromStore()); }
-function saveProblemTags(obj) { return store.saveProblemTags(obj).then(() => syncFromStore()); }
 
 let pickedIds = new Set();
 let completedMap = new Map();
@@ -756,10 +755,10 @@ let noteEditing = false;
 function updateSyncBar(status) {
   const bar = document.getElementById('syncBar');
   const labels = {
-    synced: '☁️ 已与云端同步',
-    syncing: '⏳ 正在同步云端…（已显示本地缓存）',
-    offline: '⚠️ 云端 API 不可用 — 使用本地缓存，恢复后将自动上传',
-    error: '❌ 无法连接云端 — 仅显示本地缓存，请检查 config.js',
+    synced: '☁️ 云端在线 — 本地缓存仅用于导出兜底',
+    syncing: '⏳ 正在连接云端…',
+    offline: '⚠️ 云端 API 不可用 — 写操作已暂停，本地缓存仅可用于导出',
+    error: '❌ 无法连接云端 — 请检查 config.js',
   };
   bar.textContent = labels[status] || labels.syncing;
   bar.className = 'sync-bar show ' + (status || 'syncing');
@@ -787,18 +786,28 @@ function genTagId() { return 't' + Date.now() + '_' + Math.random().toString(36)
 function getProblemTags(pid) {
   return (problemTags[pid] || []).map(id => tagDefs[id]).filter(Boolean);
 }
-function addTagToProblem(pid, tagId) {
+function showCloudWriteError() {
+  showMsg('❌ 云端不可用，操作未保存', false);
+}
+
+async function addTagToProblem(pid, tagId) {
   if (!tagDefs[tagId]) return;
-  if (!problemTags[pid]) problemTags[pid] = [];
-  if (!problemTags[pid].includes(tagId)) {
-    problemTags[pid].push(tagId);
-    saveProblemTags(problemTags);
+  if ((problemTags[pid] || []).includes(tagId)) return;
+  try {
+    await store.addProblemTag(pid, tagId);
+    syncFromStore();
+  } catch {
+    showCloudWriteError();
   }
 }
-function removeTagFromProblem(pid, tagId) {
-  if (!problemTags[pid]) return;
-  problemTags[pid] = problemTags[pid].filter(id => id !== tagId);
-  saveProblemTags(problemTags);
+async function removeTagFromProblem(pid, tagId) {
+  if (!problemTags[pid]?.includes(tagId)) return;
+  try {
+    await store.removeProblemTag(pid, tagId);
+    syncFromStore();
+  } catch {
+    showCloudWriteError();
+  }
 }
 function countTagUsage(tagId) {
   let n = 0;
@@ -868,7 +877,7 @@ function renderPickerProblem(problem) {
   document.getElementById('doneBtn').disabled = isDone;
 }
 
-function pickRandom() {
+async function pickRandom() {
   const filtered = getFiltered(currentFilter);
   const undone = filtered.filter(p => !completedMap.has(p.id));
   if (undone.length === 0) {
@@ -880,31 +889,44 @@ function pickRandom() {
   }
   const picked = undone[Math.floor(Math.random() * undone.length)];
   // 标记为"已抽到"（仅用于记忆最近抽过哪些，不限制抽题范围）
-  pickedIds.add(picked.id);
-  savePicked(pickedIds);
-  renderPickerProblem(picked);
-  updatePickerStats();
+  const nextPicked = new Set(pickedIds);
+  nextPicked.add(picked.id);
+  try {
+    await savePicked(nextPicked);
+    renderPickerProblem(picked);
+    updatePickerStats();
+  } catch {
+    showCloudWriteError();
+  }
 }
 
-function markCurrentDone() {
+async function markCurrentDone() {
   if (!currentProblem || completedMap.has(currentProblem.id)) return;
   const today = todayStr();
-  completedMap.set(currentProblem.id, today);
-  saveCompleted(completedMap);
-  renderPickerProblem(currentProblem);
-  updatePickerStats();
-  refreshList();
-  renderHeatmap();
-  showMsg(`✅ #${currentProblem.id} ${currentProblem.title} 已完成！`);
+  const nextCompleted = new Map(completedMap);
+  nextCompleted.set(currentProblem.id, today);
+  try {
+    await saveCompleted(nextCompleted);
+    renderPickerProblem(currentProblem);
+    updatePickerStats();
+    refreshList();
+    renderHeatmap();
+    showMsg(`✅ #${currentProblem.id} ${currentProblem.title} 已完成！`);
+  } catch {
+    showCloudWriteError();
+  }
 }
 
-function resetPicked() {
-  pickedIds = new Set();
-  savePicked(pickedIds);
-  currentProblem = null;
-  renderPickerProblem(null);
-  updatePickerStats();
-  showMsg('🔄 已抽记录已重置');
+async function resetPicked() {
+  try {
+    await savePicked(new Set());
+    currentProblem = null;
+    renderPickerProblem(null);
+    updatePickerStats();
+    showMsg('🔄 已抽记录已重置');
+  } catch {
+    showCloudWriteError();
+  }
 }
 
 // ====== TAB 2: LIST ======
@@ -972,20 +994,25 @@ function refreshList() {
   }).join('');
 }
 
-function toggleComplete(id) {
-  if (completedMap.has(id)) {
-    completedMap.delete(id);
+async function toggleComplete(id) {
+  const nextCompleted = new Map(completedMap);
+  if (nextCompleted.has(id)) {
+    nextCompleted.delete(id);
   } else {
-    completedMap.set(id, todayStr());
+    nextCompleted.set(id, todayStr());
   }
-  saveCompleted(completedMap);
-  refreshList();
-  updatePickerStats();
-  renderHeatmap();
+  try {
+    await saveCompleted(nextCompleted);
+    refreshList();
+    updatePickerStats();
+    renderHeatmap();
 
-  // If current picked problem was toggled, update the card
-  if (currentProblem && currentProblem.id === id) {
-    renderPickerProblem(currentProblem);
+    // If current picked problem was toggled, update the card
+    if (currentProblem && currentProblem.id === id) {
+      renderPickerProblem(currentProblem);
+    }
+  } catch {
+    showCloudWriteError();
   }
 }
 
@@ -1152,7 +1179,7 @@ tpOverlay.addEventListener('click', (e) => {
   if (e.target === tpOverlay) closeTagPicker();
 });
 document.getElementById('tagPickerClose').addEventListener('click', closeTagPicker);
-document.getElementById('tagPickerList').addEventListener('click', (e) => {
+document.getElementById('tagPickerList').addEventListener('click', async (e) => {
   const opt = e.target.closest('.tag-opt');
   if (!opt) return;
   const tid = opt.dataset.tid;
@@ -1160,25 +1187,28 @@ document.getElementById('tagPickerList').addEventListener('click', (e) => {
   if (!pid) return;
   const current = problemTags[pid] || [];
   if (current.includes(tid)) {
-    removeTagFromProblem(pid, tid);
+    await removeTagFromProblem(pid, tid);
   } else {
-    addTagToProblem(pid, tid);
+    await addTagToProblem(pid, tid);
   }
   renderTagPicker();
   refreshList();
   if (currentProblem && currentProblem.id === pid) renderPickerProblem(currentProblem);
 });
-document.getElementById('tagPickerNewBtn').addEventListener('click', () => {
+document.getElementById('tagPickerNewBtn').addEventListener('click', async () => {
   const name = document.getElementById('tagPickerNewName').value.trim();
   if (!name) return;
   const color = document.getElementById('tagPickerNewColor').value;
   const id = genTagId();
-  tagDefs[id] = { id, name, color, noteMd: '', noteUpdatedAt: null };
-  saveTags(tagDefs);
-  document.getElementById('tagPickerNewName').value = '';
-  renderTagPicker();
-  renderTagMgr();
-  buildTagFilterOptions();
+  try {
+    await saveTags({ [id]: { id, name, color, noteMd: '', noteUpdatedAt: null } });
+    document.getElementById('tagPickerNewName').value = '';
+    renderTagPicker();
+    renderTagMgr();
+    buildTagFilterOptions();
+  } catch {
+    showCloudWriteError();
+  }
 });
 
 // Tag Manager
@@ -1193,26 +1223,37 @@ document.getElementById('tagMgrList').addEventListener('click', async (e) => {
   if (!btn) return;
   const tid = btn.dataset.tid;
   if (!confirm(`确定删除标签「${tagDefs[tid]?.name}」？`)) return;
-  await store.deleteTag(tid);
-  syncFromStore();
-  if (selectedNoteTagId === tid) selectedNoteTagId = null;
-  renderTagMgr();
-  buildTagFilterOptions();
-  refreshList();
-  renderNotePanel();
-  if (currentProblem) renderPickerProblem(currentProblem);
+  try {
+    await store.deleteTag(tid);
+    syncFromStore();
+    if (selectedNoteTagId === tid) selectedNoteTagId = null;
+    renderTagMgr();
+    buildTagFilterOptions();
+    refreshList();
+    renderNotePanel();
+    if (currentProblem) renderPickerProblem(currentProblem);
+  } catch {
+    showCloudWriteError();
+  }
 });
 // ====== DATA MANAGER ======
-function exportData() {
-  const data = store.exportToJson();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `leetcode-data-${todayStr()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showDataMsg('✅ 数据已导出');
+async function exportData() {
+  try {
+    const result = await store.exportFreshOrCachedJson();
+    const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `leetcode-data-${todayStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    const msg = result.source === 'cloud'
+      ? '✅ 已从云端导出最新数据'
+      : '⚠️ 云端不可用，已导出最近一次本地缓存';
+    showDataMsg(msg, result.source === 'cloud');
+  } catch (err) {
+    showDataMsg('❌ 云端不可用，且没有可导出的本地缓存', false);
+  }
 }
 
 function importData(file) {
@@ -1233,9 +1274,9 @@ function importData(file) {
       renderTagMgr();
       renderNotePanel();
       if (currentProblem) renderPickerProblem(currentProblem);
-      showDataMsg(`✅ 导入成功！共恢复 ${data.lcCompleted ? Object.keys(data.lcCompleted).length : 0} 条完成记录，正在同步云端…`);
+      showDataMsg(`✅ 导入成功！共恢复 ${data.lcCompleted ? Object.keys(data.lcCompleted).length : 0} 条完成记录`);
     } catch (err) {
-      showDataMsg('❌ 导入失败：文件格式错误', false);
+      showDataMsg('❌ 导入失败：云端不可用或文件格式错误，操作未保存', false);
     }
   };
   reader.readAsText(file);
@@ -1266,39 +1307,50 @@ document.getElementById('importFileInput').addEventListener('change', (e) => {
 });
 document.getElementById('resetCompletedBtn').addEventListener('click', async () => {
   if (!confirm('确定重置所有完成记录？此操作不可撤销。')) return;
-  await store.resetCompleted();
-  syncFromStore();
-  updatePickerStats();
-  refreshList();
-  renderHeatmap();
-  if (currentProblem) renderPickerProblem(currentProblem);
-  showDataMsg('✅ 完成记录已重置');
+  try {
+    await store.resetCompleted();
+    syncFromStore();
+    updatePickerStats();
+    refreshList();
+    renderHeatmap();
+    if (currentProblem) renderPickerProblem(currentProblem);
+    showDataMsg('✅ 完成记录已重置');
+  } catch {
+    showDataMsg('❌ 云端不可用，操作未保存', false);
+  }
 });
 document.getElementById('resetAllBtn').addEventListener('click', async () => {
   if (!confirm('确定重置全部数据（完成记录 + 标签）？此操作不可撤销。')) return;
-  await store.resetAll();
-  syncFromStore();
-  selectedNoteTagId = null;
-  updatePickerStats();
-  refreshList();
-  renderHeatmap();
-  buildTagFilterOptions();
-  renderTagMgr();
-  renderNotePanel();
-  if (currentProblem) renderPickerProblem(currentProblem);
-  showDataMsg('✅ 全部数据已重置');
+  try {
+    await store.resetAll();
+    syncFromStore();
+    selectedNoteTagId = null;
+    updatePickerStats();
+    refreshList();
+    renderHeatmap();
+    buildTagFilterOptions();
+    renderTagMgr();
+    renderNotePanel();
+    if (currentProblem) renderPickerProblem(currentProblem);
+    showDataMsg('✅ 全部数据已重置');
+  } catch {
+    showDataMsg('❌ 云端不可用，操作未保存', false);
+  }
 });
 
-document.getElementById('tagMgrNewBtn').addEventListener('click', () => {
+document.getElementById('tagMgrNewBtn').addEventListener('click', async () => {
   const name = document.getElementById('tagMgrNewName').value.trim();
   if (!name) return;
   const color = document.getElementById('tagMgrNewColor').value;
   const id = genTagId();
-  tagDefs[id] = { id, name, color, noteMd: '', noteUpdatedAt: null };
-  saveTags(tagDefs);
-  document.getElementById('tagMgrNewName').value = '';
-  renderTagMgr();
-  buildTagFilterOptions();
+  try {
+    await saveTags({ [id]: { id, name, color, noteMd: '', noteUpdatedAt: null } });
+    document.getElementById('tagMgrNewName').value = '';
+    renderTagMgr();
+    buildTagFilterOptions();
+  } catch {
+    showCloudWriteError();
+  }
 });
 
 // Click on tag add / del buttons in problem list
@@ -1317,9 +1369,10 @@ document.getElementById('problemList').addEventListener('click', (e) => {
     e.stopPropagation();
     const pid = parseInt(del.dataset.pid);
     const tid = del.dataset.tid;
-    removeTagFromProblem(pid, tid);
-    refreshList();
-    if (currentProblem && currentProblem.id === pid) renderPickerProblem(currentProblem);
+    removeTagFromProblem(pid, tid).then(() => {
+      refreshList();
+      if (currentProblem && currentProblem.id === pid) renderPickerProblem(currentProblem);
+    });
     return;
   }
   // Open note from tag badge
@@ -1529,9 +1582,19 @@ function renderNotePanel() {
   editor.value = noteMd;
   editor.onfocus = () => { noteEditing = true; };
   editor.onblur = () => { noteEditing = false; };
+  let noteSaveTimer = null;
   editor.oninput = () => {
-    store.saveTagNote(selectedNoteTagId, editor.value);
-    syncFromStore();
+    const tagId = selectedNoteTagId;
+    const noteValue = editor.value;
+    clearTimeout(noteSaveTimer);
+    noteSaveTimer = setTimeout(async () => {
+      try {
+        await store.saveTagNote(tagId, noteValue);
+        syncFromStore();
+      } catch {
+        showCloudWriteError();
+      }
+    }, 500);
   };
 }
 
@@ -1585,9 +1648,7 @@ document.getElementById('problemList').addEventListener('click', (e) => {
 });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    store.flushSync();
-  } else {
+  if (document.visibilityState !== 'hidden') {
     store.tick().then(() => syncFromStore());
   }
 });

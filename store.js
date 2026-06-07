@@ -20,17 +20,17 @@
 
       deleteTag: (id) => db.deleteTag(id),
       saveTags: (obj) => db.saveTags(obj),
-      saveProblemTags: (obj) => db.saveProblemTags(obj),
       saveCompleted: (map) => db.saveCompleted(map),
       savePickedIds: (set) => db.savePickedIds(set),
       saveTagNote: (id, md) => db.saveTagNote(id, md),
+      addProblemTag: (problemId, tagId) => db.addProblemTag(problemId, tagId),
+      removeProblemTag: (problemId, tagId) => db.removeProblemTag(problemId, tagId),
 
       importFromJson: (data) => db.importFromJson(data),
-      exportToJson: db.exportToJson,
+      exportFreshOrCachedJson: () => db.exportFreshOrCachedJson(),
       resetCompleted: () => db.resetCompleted(),
       resetAll: () => db.resetAll(),
 
-      flushSync: () => db.flushSync(),
       tick: () => db.tick(),
       pullFromCloud: () => db.pullFromCloud(),
     };

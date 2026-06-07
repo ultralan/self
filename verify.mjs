@@ -66,11 +66,20 @@ for (const f of requiredFiles) {
 }
 
 const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-for (const needle of ['sync-db.js', 'store.js', 'panel-notes', 'createStore', 'exportToJson', 'importFromJson', 'deleteTag']) {
+for (const needle of ['sync-db.js', 'store.js', 'panel-notes', 'createStore', 'exportFreshOrCachedJson', 'importFromJson', 'deleteTag']) {
   if (!indexHtml.includes(needle)) {
     console.error('index.html missing:', needle);
     ok = false;
   }
+}
+const inlineScripts = [...indexHtml.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
+  .map((m) => m[1])
+  .join('\n');
+try {
+  execSync('node --check --input-type=commonjs -', { input: inlineScripts, stdio: ['pipe', 'pipe', 'pipe'] });
+} catch {
+  console.error('index.html inline script syntax error');
+  ok = false;
 }
 
 const layoutNeedles = [
@@ -90,16 +99,42 @@ for (const needle of layoutNeedles) {
 }
 
 const syncDbJs = fs.readFileSync(path.join(__dirname, 'sync-db.js'), 'utf8');
-for (const needle of ['createSyncDB', 'commit', 'localRev', 'syncedRev', 'deleteTag']) {
+const storeJs = fs.readFileSync(path.join(__dirname, 'store.js'), 'utf8');
+for (const needle of ['createSyncDB', 'fetchCloud', 'persistCache', 'exportFreshOrCachedJson', 'deleteTag', 'rawMeta.cacheFallback']) {
   if (!syncDbJs.includes(needle)) {
     console.error('sync-db.js missing:', needle);
     ok = false;
   }
 }
+for (const forbidden of ['localRev', 'syncedRev', 'hasLocalChanges', 'async function push', 'pendingOps']) {
+  if (syncDbJs.includes(forbidden)) {
+    console.error('sync-db.js should not contain old local-sync marker:', forbidden);
+    ok = false;
+  }
+}
+for (const forbidden of ['async saveProblemTags', 'exportToJson()', 'flushSync:']) {
+  if (syncDbJs.includes(forbidden)) {
+    console.error('sync-db.js should not expose old sync API:', forbidden);
+    ok = false;
+  }
+}
+for (const forbidden of ['saveProblemTags', 'exportToJson', 'flushSync']) {
+  if (storeJs.includes(forbidden)) {
+    console.error('store.js should not expose old sync API:', forbidden);
+    ok = false;
+  }
+}
+for (const needle of ['exportFreshOrCachedJson', 'cacheFallback']) {
+  if (!indexHtml.includes(needle) && !syncDbJs.includes(needle) && !storeJs.includes(needle)) {
+    console.error('cloud-first export missing:', needle);
+    ok = false;
+  }
+}
 try {
   execSync('node --check sync-db.js', { cwd: __dirname, stdio: 'pipe' });
+  execSync('node --check store.js', { cwd: __dirname, stdio: 'pipe' });
 } catch {
-  console.error('sync-db.js syntax error');
+  console.error('sync-db/store syntax error');
   ok = false;
 }
 
