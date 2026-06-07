@@ -377,7 +377,7 @@
       getCompleted: () => getPublicState().completedMap,
       getPickedIds: () => getPublicState().pickedIds,
 
-      async function bootstrapFromCloud() {
+      async bootstrapFromCloud() {
         return withLock(async () => {
           if (hasLocalChanges()) {
             const ok = await push();
@@ -396,7 +396,7 @@
             setStatus('offline');
           }
         });
-      }
+      },
 
       async init() {
         // 1. 立刻用本地缓存渲染（stale-while-revalidate）

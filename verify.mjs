@@ -4,6 +4,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -78,6 +79,12 @@ for (const needle of ['createSyncDB', 'commit', 'localRev', 'syncedRev', 'delete
     console.error('sync-db.js missing:', needle);
     ok = false;
   }
+}
+try {
+  execSync('node --check sync-db.js', { cwd: __dirname, stdio: 'pipe' });
+} catch {
+  console.error('sync-db.js syntax error');
+  ok = false;
 }
 
 if (!fs.existsSync(jsonPath)) {
