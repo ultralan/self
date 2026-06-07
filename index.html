@@ -410,6 +410,84 @@
   .data-dialog .section .btn-row-data .btn-secondary-data { background: #f0f0f0; color: #555; }
   .data-dialog .section .btn-row-data .btn-secondary-data:hover { background: #e0e0e0; }
   #importFileInput { display: none; }
+
+  /* Sync status */
+  .sync-bar {
+    font-size: 12px; padding: 6px 12px; border-radius: 8px;
+    margin-bottom: 10px; text-align: center; display: none;
+  }
+  .sync-bar.show { display: block; }
+  .sync-bar.synced { background: #f0fdf4; color: #166534; }
+  .sync-bar.syncing { background: #eff6ff; color: #1d4ed8; }
+  .sync-bar.offline { background: #fffbeb; color: #92400e; }
+  .sync-bar.no-config { background: #f5f5f5; color: #666; }
+
+  /* Notes Tab */
+  .notes-layout {
+    display: flex; gap: 16px; min-height: 480px;
+  }
+  .notes-sidebar {
+    width: 160px; flex-shrink: 0;
+    border-right: 1px solid #eee; padding-right: 12px;
+    max-height: 520px; overflow-y: auto;
+  }
+  .notes-sidebar-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; color: #333; margin-bottom: 4px;
+    transition: background 0.1s;
+  }
+  .notes-sidebar-item:hover { background: #f5f5f5; }
+  .notes-sidebar-item.active { background: #eff6ff; color: #1d4ed8; }
+  .notes-sidebar-item .dot {
+    width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
+  }
+  .notes-sidebar-item .note-icon { margin-left: auto; font-size: 11px; opacity: 0.7; }
+  .notes-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .notes-header {
+    margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee;
+  }
+  .notes-header h4 { font-size: 16px; color: #1a1a1a; margin-bottom: 4px; }
+  .notes-header .meta { font-size: 12px; color: #888; }
+  .notes-editor-wrap {
+    display: flex; gap: 12px; flex: 1; min-height: 280px;
+  }
+  .notes-editor-wrap textarea {
+    flex: 1; min-height: 260px; padding: 12px;
+    border: 1px solid #ddd; border-radius: 8px; font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    resize: vertical; outline: none; line-height: 1.5;
+  }
+  .notes-editor-wrap textarea:focus { border-color: #2563eb; }
+  .notes-preview {
+    flex: 1; min-height: 260px; padding: 12px 14px;
+    border: 1px solid #eee; border-radius: 8px; background: #fafafa;
+    overflow-y: auto; font-size: 14px; line-height: 1.6;
+  }
+  .notes-preview h1, .notes-preview h2, .notes-preview h3 { margin: 12px 0 8px; }
+  .notes-preview h1 { font-size: 1.4em; }
+  .notes-preview h2 { font-size: 1.2em; }
+  .notes-preview code { background: #eee; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  .notes-preview pre { background: #1a1a1a; color: #f5f5f5; padding: 12px; border-radius: 8px; overflow-x: auto; }
+  .notes-preview pre code { background: none; padding: 0; color: inherit; }
+  .notes-preview ul, .notes-preview ol { padding-left: 1.4em; margin: 8px 0; }
+  .notes-related { margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee; }
+  .notes-related h5 { font-size: 13px; color: #555; margin-bottom: 8px; }
+  .notes-related a {
+    display: block; font-size: 13px; color: #2563eb; text-decoration: none;
+    padding: 4px 0;
+  }
+  .notes-related a:hover { text-decoration: underline; }
+  .notes-empty { color: #bbb; text-align: center; padding: 60px 20px; font-size: 14px; }
+  .tag-badge.clickable { cursor: pointer; }
+  .tag-badge.clickable:hover { filter: brightness(1.08); }
+  .mgr-item .tname { cursor: pointer; }
+  .mgr-item .tname:hover { color: #2563eb; }
+  @media (max-width: 640px) {
+    .notes-layout { flex-direction: column; }
+    .notes-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #eee; padding-bottom: 12px; max-height: 160px; }
+    .notes-editor-wrap { flex-direction: column; }
+  }
 </style>
 </head>
 <body>
@@ -424,10 +502,13 @@
     <button class="btn btn-outline btn-sm" id="dataMgrBtn">💾 数据管理</button>
   </div>
 
+  <div class="sync-bar" id="syncBar"></div>
+
   <div class="tabs">
     <button class="tab active" data-tab="picker">🎲 抽题</button>
     <button class="tab" data-tab="list">📋 题库</button>
     <button class="tab" data-tab="heatmap">🔥 热力图</button>
+    <button class="tab" data-tab="notes">📓 笔记</button>
   </div>
 
   <div class="message-bar" id="msgBar"></div>
@@ -485,6 +566,16 @@
     </div>
   </div>
 
+  <!-- ====== NOTES PANEL ====== -->
+  <div class="panel" id="panel-notes">
+    <div class="card">
+      <div class="card-title">📓 标签笔记</div>
+      <div id="notesContainer">
+        <div class="notes-empty">还没有标签，请先在标签管理中创建</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ====== HEATMAP PANEL ====== -->
   <div class="panel" id="panel-heatmap">
     <div class="card">
@@ -528,7 +619,7 @@
     <button class="close" id="dataMgrClose">&times;</button>
     <h3>💾 数据管理</h3>
     <div class="section">
-      <p>数据存储在浏览器本地（localStorage），换设备或清缓存会丢失。建议定期导出备份。</p>
+      <p>数据优先保存在浏览器本地（localStorage），并自动同步到 Supabase 云端。云端不可用时仍可离线使用。建议定期导出 JSON 备份。</p>
     </div>
     <div class="section">
       <p><strong>📤 导出 / 📥 导入</strong></p>
@@ -564,60 +655,55 @@
   </div>
 </div>
 
+<script src="config.js" onerror="void 0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="data.js"></script>
+<script src="store.js"></script>
 <script>
 // ====== DATA ======
 const allProblems = LC_PROBLEMS;
+const store = createStore();
+
 function localYMD(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
-const todayStr = () => localYMD(new Date());
+const todayStr = () => store.todayStr ? store.todayStr() : localYMD(new Date());
 
-// Load persisted state
-function loadPicked() {
-  return new Set(JSON.parse(localStorage.getItem('lcPickedIds') || '[]'));
-}
-function savePicked(set) {
-  localStorage.setItem('lcPickedIds', JSON.stringify([...set]));
-}
-function loadCompleted() {
-  // returns Map: problemId -> dateString
-  const raw = JSON.parse(localStorage.getItem('lcCompleted') || '{}');
-  return new Map(Object.entries(raw).map(([k,v]) => [parseInt(k), v]));
-}
-function saveCompleted(map) {
-  const obj = {};
-  for (const [k, v] of map) obj[k] = v;
-  localStorage.setItem('lcCompleted', JSON.stringify(obj));
+function syncFromStore() {
+  pickedIds = store.getPickedIds();
+  completedMap = store.getCompleted();
+  tagDefs = store.getTagDefs();
+  problemTags = store.getProblemTags();
 }
 
-let pickedIds = loadPicked();
-let completedMap = loadCompleted(); // id -> date string
+function savePicked(set) { store.savePickedIds(set); syncFromStore(); }
+function saveCompleted(map) { store.saveCompleted(map); syncFromStore(); }
+function saveTags(obj) { store.saveTags(obj); syncFromStore(); }
+function saveProblemTags(obj) { store.saveProblemTags(obj); syncFromStore(); }
+
+let pickedIds = new Set();
+let completedMap = new Map();
+let tagDefs = {};
+let problemTags = {};
 let tagPickerProblemId = null;
+let selectedNoteTagId = null;
 
-// ====== TAG DATA ======
-function loadTags() {
-  const raw = JSON.parse(localStorage.getItem('lcTagDefs') || '{}');
-  // raw: { tagId: { id, name, color } }
-  return raw;
+function updateSyncBar(status) {
+  const bar = document.getElementById('syncBar');
+  const labels = {
+    synced: '☁️ 已同步云端',
+    syncing: '⏳ 正在同步…',
+    offline: '⚠️ 离线模式 — 数据已保存在本地，恢复网络后将自动同步',
+    'no-config': '💾 仅本地模式 — 配置 config.js 可启用云端同步',
+  };
+  bar.textContent = labels[status] || '';
+  bar.className = 'sync-bar show ' + (status || 'no-config');
 }
-function saveTags(obj) {
-  localStorage.setItem('lcTagDefs', JSON.stringify(obj));
-}
-function loadProblemTags() {
-  const raw = JSON.parse(localStorage.getItem('lcProblemTags') || '{}');
-  // raw: { "1": ["tagId1", "tagId2"], ... }
-  return raw;
-}
-function saveProblemTags(obj) {
-  localStorage.setItem('lcProblemTags', JSON.stringify(obj));
-}
-
-let tagDefs = loadTags();         // { id: { id, name, color } }
-let problemTags = loadProblemTags(); // { problemId: [tagId, ...] }
+store.setOnStatusChange(updateSyncBar);
 
 function genTagId() { return 't' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
 
@@ -694,7 +780,7 @@ function renderPickerProblem(problem) {
   const lcUrl = `https://leetcode.com/problems/${problem.slug}/`;
   const userTags = getProblemTags(problem.id);
   const tagBadges = userTags.map(t =>
-    `<span class="tag-badge" style="background:${t.color}">${t.name}</span>`
+    `<span class="tag-badge clickable" style="background:${t.color}" data-tid="${t.id}" data-open-note="1">${t.name}</span>`
   ).join('');
   card.innerHTML = `
     <div class="problem-id">#${problem.id}</div>
@@ -796,7 +882,7 @@ function refreshList() {
     ).join('');
     const userTags = getProblemTags(p.id);
     const tagBadges = userTags.map(t =>
-      `<span class="tag-badge" style="background:${t.color}">${t.name}<span class="del" data-pid="${p.id}" data-tid="${t.id}">&times;</span></span>`
+      `<span class="tag-badge clickable" style="background:${t.color}" data-tid="${t.id}" data-open-note="1">${t.name}<span class="del" data-pid="${p.id}" data-tid="${t.id}">&times;</span></span>`
     ).join('');
     const addBtn = `<span class="tag-add-btn" data-pid="${p.id}">+</span>`;
     const lcUrl = `https://leetcode.com/problems/${p.slug}/`;
@@ -979,6 +1065,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'heatmap') renderHeatmap();
     if (tab.dataset.tab === 'list') refreshList();
+    if (tab.dataset.tab === 'notes') renderNotePanel();
   });
 });
 
@@ -1009,7 +1096,7 @@ document.getElementById('tagPickerNewBtn').addEventListener('click', () => {
   if (!name) return;
   const color = document.getElementById('tagPickerNewColor').value;
   const id = genTagId();
-  tagDefs[id] = { id, name, color };
+  tagDefs[id] = { id, name, color, noteMd: '', noteUpdatedAt: null };
   saveTags(tagDefs);
   document.getElementById('tagPickerNewName').value = '';
   renderTagPicker();
@@ -1036,21 +1123,16 @@ document.getElementById('tagMgrList').addEventListener('click', (e) => {
   saveProblemTags(problemTags);
   delete tagDefs[tid];
   saveTags(tagDefs);
+  if (selectedNoteTagId === tid) selectedNoteTagId = null;
   renderTagMgr();
   buildTagFilterOptions();
   refreshList();
+  renderNotePanel();
   if (currentProblem) renderPickerProblem(currentProblem);
 });
 // ====== DATA MANAGER ======
 function exportData() {
-  const data = {
-    version: 1,
-    exportedAt: todayStr(),
-    lcPickedIds: JSON.parse(localStorage.getItem('lcPickedIds') || '[]'),
-    lcCompleted: JSON.parse(localStorage.getItem('lcCompleted') || '{}'),
-    lcTagDefs: JSON.parse(localStorage.getItem('lcTagDefs') || '{}'),
-    lcProblemTags: JSON.parse(localStorage.getItem('lcProblemTags') || '{}'),
-  };
+  const data = store.exportToJson();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1070,22 +1152,16 @@ function importData(file) {
         showDataMsg('❌ 无效的备份文件', false);
         return;
       }
-      if (data.lcPickedIds) localStorage.setItem('lcPickedIds', JSON.stringify(data.lcPickedIds));
-      if (data.lcCompleted) localStorage.setItem('lcCompleted', JSON.stringify(data.lcCompleted));
-      if (data.lcTagDefs) localStorage.setItem('lcTagDefs', JSON.stringify(data.lcTagDefs));
-      if (data.lcProblemTags) localStorage.setItem('lcProblemTags', JSON.stringify(data.lcProblemTags));
-      // Reload state
-      pickedIds = loadPicked();
-      completedMap = loadCompleted();
-      tagDefs = loadTags();
-      problemTags = loadProblemTags();
+      store.importFromJson(data);
+      syncFromStore();
       updatePickerStats();
       refreshList();
       renderHeatmap();
       buildTagFilterOptions();
       renderTagMgr();
+      renderNotePanel();
       if (currentProblem) renderPickerProblem(currentProblem);
-      showDataMsg(`✅ 导入成功！共恢复 ${data.lcCompleted ? Object.keys(data.lcCompleted).length : 0} 条完成记录`);
+      showDataMsg(`✅ 导入成功！共恢复 ${data.lcCompleted ? Object.keys(data.lcCompleted).length : 0} 条完成记录，正在同步云端…`);
     } catch (err) {
       showDataMsg('❌ 导入失败：文件格式错误', false);
     }
@@ -1118,10 +1194,8 @@ document.getElementById('importFileInput').addEventListener('change', (e) => {
 });
 document.getElementById('resetCompletedBtn').addEventListener('click', () => {
   if (!confirm('确定重置所有完成记录？此操作不可撤销。')) return;
-  completedMap = new Map();
-  saveCompleted(completedMap);
-  pickedIds = new Set();
-  savePicked(pickedIds);
+  store.resetCompleted();
+  syncFromStore();
   updatePickerStats();
   refreshList();
   renderHeatmap();
@@ -1130,19 +1204,15 @@ document.getElementById('resetCompletedBtn').addEventListener('click', () => {
 });
 document.getElementById('resetAllBtn').addEventListener('click', () => {
   if (!confirm('确定重置全部数据（完成记录 + 标签）？此操作不可撤销。')) return;
-  localStorage.removeItem('lcPickedIds');
-  localStorage.removeItem('lcCompleted');
-  localStorage.removeItem('lcTagDefs');
-  localStorage.removeItem('lcProblemTags');
-  pickedIds = new Set();
-  completedMap = new Map();
-  tagDefs = {};
-  problemTags = {};
+  store.resetAll();
+  syncFromStore();
+  selectedNoteTagId = null;
   updatePickerStats();
   refreshList();
   renderHeatmap();
   buildTagFilterOptions();
   renderTagMgr();
+  renderNotePanel();
   if (currentProblem) renderPickerProblem(currentProblem);
   showDataMsg('✅ 全部数据已重置');
 });
@@ -1152,7 +1222,7 @@ document.getElementById('tagMgrNewBtn').addEventListener('click', () => {
   if (!name) return;
   const color = document.getElementById('tagMgrNewColor').value;
   const id = genTagId();
-  tagDefs[id] = { id, name, color };
+  tagDefs[id] = { id, name, color, noteMd: '', noteUpdatedAt: null };
   saveTags(tagDefs);
   document.getElementById('tagMgrNewName').value = '';
   renderTagMgr();
@@ -1179,6 +1249,11 @@ document.getElementById('problemList').addEventListener('click', (e) => {
     refreshList();
     if (currentProblem && currentProblem.id === pid) renderPickerProblem(currentProblem);
     return;
+  }
+  // Open note from tag badge
+  const badge = e.target.closest('.tag-badge[data-open-note]');
+  if (badge && !e.target.closest('.del')) {
+    openNoteTab(badge.dataset.tid);
   }
 });
 
@@ -1270,14 +1345,120 @@ function renderTagMgr() {
   list.innerHTML = ids.map(id => {
     const t = tagDefs[id];
     const count = countTagUsage(id);
+    const hasNote = (t.noteMd || '').trim().length > 0;
     return `<div class="mgr-item">
       <span class="preview" style="background:${t.color}">${t.name}</span>
-      <span class="tname">${t.name}</span>
+      <span class="tname" data-tid="${id}" title="打开笔记">${hasNote ? '📝 ' : ''}${t.name}</span>
       <span class="tcount">${count} 题</span>
       <button class="del-btn" data-tid="${id}">&times;</button>
     </div>`;
   }).join('');
 }
+
+// ====== NOTES TAB ======
+function openNoteTab(tagId) {
+  selectedNoteTagId = tagId;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.tab[data-tab="notes"]').classList.add('active');
+  document.getElementById('panel-notes').classList.add('active');
+  renderNotePanel();
+}
+
+function getProblemsForTag(tagId) {
+  const out = [];
+  for (const pid in problemTags) {
+    if (problemTags[pid].includes(tagId)) {
+      const p = allProblems.find(x => x.id === parseInt(pid, 10));
+      if (p) out.push(p);
+    }
+  }
+  return out.sort((a, b) => a.id - b.id);
+}
+
+function renderNotePanel() {
+  const container = document.getElementById('notesContainer');
+  const ids = Object.keys(tagDefs);
+  if (ids.length === 0) {
+    container.innerHTML = '<div class="notes-empty">还没有标签，请先在标签管理中创建</div>';
+    return;
+  }
+  if (!selectedNoteTagId || !tagDefs[selectedNoteTagId]) {
+    selectedNoteTagId = ids[0];
+  }
+  const t = tagDefs[selectedNoteTagId];
+  const related = getProblemsForTag(selectedNoteTagId);
+  const noteMd = t.noteMd || '';
+  const previewHtml = typeof marked !== 'undefined' ? marked.parse(noteMd || '*暂无内容*') : (noteMd || '暂无内容');
+
+  const sidebar = ids.map(id => {
+    const tag = tagDefs[id];
+    const active = id === selectedNoteTagId ? ' active' : '';
+    const icon = (tag.noteMd || '').trim() ? '📝' : '';
+    return `<div class="notes-sidebar-item${active}" data-tid="${id}">
+      <span class="dot" style="background:${tag.color}"></span>
+      <span>${tag.name}</span>
+      ${icon ? `<span class="note-icon">${icon}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  const relatedHtml = related.length
+    ? related.map(p => `<a href="https://leetcode.com/problems/${p.slug}/" target="_blank">#${p.id} ${p.title}</a>`).join('')
+    : '<span style="color:#bbb;font-size:13px">暂无关联题目</span>';
+
+  const updated = t.noteUpdatedAt ? `更新于 ${t.noteUpdatedAt}` : '尚未编辑';
+
+  container.innerHTML = `
+    <div class="notes-layout">
+      <div class="notes-sidebar">${sidebar}</div>
+      <div class="notes-main">
+        <div class="notes-header">
+          <h4><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${t.color};margin-right:6px;vertical-align:middle"></span>${t.name}</h4>
+          <div class="meta">关联 ${related.length} 题 · ${updated}</div>
+        </div>
+        <div class="notes-editor-wrap">
+          <textarea id="noteEditor" placeholder="在此编写 Markdown 笔记…"></textarea>
+          <div class="notes-preview" id="notePreview">${previewHtml}</div>
+        </div>
+        <div class="notes-related">
+          <h5>关联题目</h5>
+          ${relatedHtml}
+        </div>
+      </div>
+    </div>`;
+
+  container.querySelectorAll('.notes-sidebar-item').forEach(el => {
+    el.addEventListener('click', () => {
+      selectedNoteTagId = el.dataset.tid;
+      renderNotePanel();
+    });
+  });
+
+  const editor = document.getElementById('noteEditor');
+  editor.value = noteMd;
+  editor.addEventListener('input', () => {
+    const md = editor.value;
+    if (typeof marked !== 'undefined') {
+      document.getElementById('notePreview').innerHTML = marked.parse(md || '*暂无内容*');
+    }
+    store.saveTagNote(selectedNoteTagId, md);
+    syncFromStore();
+    renderTagMgr();
+  });
+}
+
+document.getElementById('card').addEventListener('click', (e) => {
+  const badge = e.target.closest('.tag-badge[data-open-note]');
+  if (badge) openNoteTab(badge.dataset.tid);
+});
+
+document.getElementById('tagMgrList').addEventListener('click', (e) => {
+  const name = e.target.closest('.tname');
+  if (name && name.dataset.tid) {
+    closeTagMgr();
+    openNoteTab(name.dataset.tid);
+  }
+});
 
 // ====== EVENT BINDINGS ======
 
@@ -1305,10 +1486,15 @@ document.getElementById('problemList').addEventListener('click', (e) => {
 });
 
 // ====== INIT ======
-updatePickerStats();
-renderHeatmap();
-refreshList();
-buildTagFilterOptions();
+(async function initApp() {
+  await store.init();
+  syncFromStore();
+  updateSyncBar(store.getSyncStatus());
+  updatePickerStats();
+  renderHeatmap();
+  refreshList();
+  buildTagFilterOptions();
+})();
 </script>
 </body>
 </html>
