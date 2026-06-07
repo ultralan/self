@@ -2,15 +2,44 @@ name: Supabase Heartbeat
 
 on:
   schedule:
-    - cron: '0 0 * * 0,3'
+    # 每天 12:00 UTC — 7 天 pause 阈值下留足缓冲（即使漏跑几天也安全）
+    - cron: '0 12 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase REST API
+      - name: Validate secrets
         run: |
-          curl -sf "${{ secrets.SUPABASE_URL }}/rest/v1/tag_defs?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+            echo "::error::缺少 Secrets：请在仓库 Settings → Secrets → Actions 配置 SUPABASE_URL 和 SUPABASE_ANON_KEY"
+            exit 1
+          fi
+
+      - name: Ping Supabase REST API (with retry)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          URL="${SUPABASE_URL%/}/rest/v1/tag_defs?select=id&limit=1"
+          MAX_ATTEMPTS=3
+          RETRY_WAIT_SEC=30
+
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            echo "Attempt ${attempt}/${MAX_ATTEMPTS} → ${URL}"
+            if curl -sfS --connect-timeout 15 --max-time 30 "$URL" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"; then
+              echo "✅ Supabase heartbeat OK"
+              exit 0
+            fi
+            echo "⚠️ Attempt ${attempt} failed"
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              sleep "$RETRY_WAIT_SEC"
+            fi
+          done
+
+          echo "::error::Supabase heartbeat failed after ${MAX_ATTEMPTS} attempts"
+          exit 1
