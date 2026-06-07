@@ -1,26 +1,22 @@
 name: Supabase Heartbeat
 
 on:
+  push:
+    branches: [leetcode, main, master]
   schedule:
-    # 每天 12:00 UTC — 7 天 pause 阈值下留足缓冲（即使漏跑几天也安全）
+    # 每天 12:00 UTC — 7 天 pause 阈值下留足缓冲
     - cron: '0 12 * * *'
   workflow_dispatch:
+
+env:
+  SUPABASE_URL: https://ovxaymldzdiatllhjbvx.supabase.co
+  SUPABASE_ANON_KEY: sb_publishable_H3ea5scu5VwoJAkA6ZDQtA_WTj-Eycq
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate secrets
-        run: |
-          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
-            echo "::error::缺少 Secrets：请在仓库 Settings → Secrets → Actions 配置 SUPABASE_URL 和 SUPABASE_ANON_KEY"
-            exit 1
-          fi
-
       - name: Ping Supabase REST API (with retry)
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           set -euo pipefail
           URL="${SUPABASE_URL%/}/rest/v1/tag_defs?select=id&limit=1"
