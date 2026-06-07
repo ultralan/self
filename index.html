@@ -717,7 +717,7 @@ function updateSyncBar(status) {
   const bar = document.getElementById('syncBar');
   const labels = {
     synced: '☁️ 已与云端同步',
-    syncing: '⏳ 正在同步云端…',
+    syncing: '⏳ 正在同步云端…（已显示本地缓存）',
     offline: '⚠️ 云端 API 不可用 — 使用本地缓存，恢复后将自动上传',
     error: '❌ 无法连接云端 — 仅显示本地缓存，请检查 config.js',
   };
@@ -1234,9 +1234,9 @@ document.getElementById('resetCompletedBtn').addEventListener('click', async () 
   if (currentProblem) renderPickerProblem(currentProblem);
   showDataMsg('✅ 完成记录已重置');
 });
-document.getElementById('resetAllBtn').addEventListener('click', () => {
+document.getElementById('resetAllBtn').addEventListener('click', async () => {
   if (!confirm('确定重置全部数据（完成记录 + 标签）？此操作不可撤销。')) return;
-  store.resetAll();
+  await store.resetAll();
   syncFromStore();
   selectedNoteTagId = null;
   updatePickerStats();
@@ -1564,7 +1564,6 @@ document.addEventListener('keydown', (e) => {
   try {
     store.setOnDataChange(applyCloudDataToUI);
     await store.init();
-    applyCloudDataToUI();
   } catch (err) {
     console.error('initApp failed', err);
     syncFromStore();

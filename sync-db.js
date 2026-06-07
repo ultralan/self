@@ -377,25 +377,12 @@
       getCompleted: () => getPublicState().completedMap,
       getPickedIds: () => getPublicState().pickedIds,
 
-      async init() {
-        const cfg = global.CONFIG;
-        if (!cfg?.SUPABASE_URL || !cfg?.SUPABASE_ANON_KEY || !global.supabase?.createClient) {
-          loadCache();
-          setStatus('error');
-          notify();
-          return;
-        }
-
-        supabase = global.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-        setStatus('syncing');
-
+      async function bootstrapFromCloud() {
         return withLock(async () => {
-          loadCache();
           if (hasLocalChanges()) {
             const ok = await push();
             if (!ok) {
-              notify();
-              startTicker();
+              setStatus('offline');
               return;
             }
           }
@@ -405,12 +392,30 @@
             notify();
           } else if (pulled.ok) {
             setStatus('synced');
-            notify();
           } else {
             setStatus('offline');
-            notify();
           }
-          startTicker();
+        });
+      }
+
+      async init() {
+        // 1. 立刻用本地缓存渲染（stale-while-revalidate）
+        loadCache();
+        notify();
+
+        const cfg = global.CONFIG;
+        if (!cfg?.SUPABASE_URL || !cfg?.SUPABASE_ANON_KEY || !global.supabase?.createClient) {
+          setStatus('error');
+          return;
+        }
+
+        // 2. 后台与云端对齐，不阻塞首屏
+        supabase = global.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+        setStatus('syncing');
+        startTicker();
+        bootstrapFromCloud().catch((e) => {
+          console.warn('[sync-db] bootstrap failed', e);
+          setStatus('offline');
         });
       },
 
