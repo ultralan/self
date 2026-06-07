@@ -449,21 +449,37 @@
   }
   .notes-header h4 { font-size: 16px; color: #1a1a1a; margin-bottom: 4px; }
   .notes-header .meta { font-size: 12px; color: #888; }
+  .notes-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; gap: 8px;
+  }
+  .notes-view-toggle { display: flex; gap: 4px; }
+  .notes-view-toggle .btn-toggle {
+    padding: 5px 14px; font-size: 12px; font-weight: 500;
+    border: 1px solid #ddd; border-radius: 6px; background: #fff;
+    color: #555; cursor: pointer; transition: all 0.12s;
+  }
+  .notes-view-toggle .btn-toggle:hover { background: #f5f5f5; }
+  .notes-view-toggle .btn-toggle.active {
+    background: #2563eb; border-color: #2563eb; color: #fff;
+  }
   .notes-editor-wrap {
-    display: flex; gap: 12px; flex: 1; min-height: 280px;
+    flex: 1; min-height: 360px; display: flex; flex-direction: column;
   }
   .notes-editor-wrap textarea {
-    flex: 1; min-height: 260px; padding: 12px;
+    flex: 1; width: 100%; min-height: 360px; padding: 12px;
     border: 1px solid #ddd; border-radius: 8px; font-size: 13px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     resize: vertical; outline: none; line-height: 1.5;
   }
   .notes-editor-wrap textarea:focus { border-color: #2563eb; }
   .notes-preview {
-    flex: 1; min-height: 260px; padding: 12px 14px;
+    flex: 1; width: 100%; min-height: 360px; padding: 12px 14px;
     border: 1px solid #eee; border-radius: 8px; background: #fafafa;
     overflow-y: auto; font-size: 14px; line-height: 1.6;
   }
+  .notes-editor-wrap.edit-mode .notes-preview { display: none; }
+  .notes-editor-wrap.preview-mode textarea { display: none; }
   .notes-preview h1, .notes-preview h2, .notes-preview h3 { margin: 12px 0 8px; }
   .notes-preview h1 { font-size: 1.4em; }
   .notes-preview h2 { font-size: 1.2em; }
@@ -486,7 +502,6 @@
   @media (max-width: 640px) {
     .notes-layout { flex-direction: column; }
     .notes-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #eee; padding-bottom: 12px; max-height: 160px; }
-    .notes-editor-wrap { flex-direction: column; }
   }
 </style>
 </head>
@@ -691,6 +706,7 @@ let tagDefs = {};
 let problemTags = {};
 let tagPickerProblemId = null;
 let selectedNoteTagId = null;
+let noteViewMode = 'edit';
 
 function updateSyncBar(status) {
   const bar = document.getElementById('syncBar');
@@ -704,6 +720,19 @@ function updateSyncBar(status) {
   bar.className = 'sync-bar show ' + (status || 'no-config');
 }
 store.setOnStatusChange(updateSyncBar);
+store.setOnDataChange(() => {
+  syncFromStore();
+  updateSyncBar(store.getSyncStatus());
+  updatePickerStats();
+  renderHeatmap();
+  refreshList();
+  buildTagFilterOptions();
+  renderTagMgr();
+  const notesActive = document.querySelector('.tab[data-tab="notes"]')?.classList.contains('active');
+  const editor = document.getElementById('noteEditor');
+  if (notesActive && editor && document.activeElement === editor) return;
+  if (notesActive) renderNotePanel();
+});
 
 function genTagId() { return 't' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
 
@@ -1376,6 +1405,25 @@ function getProblemsForTag(tagId) {
   return out.sort((a, b) => a.id - b.id);
 }
 
+function setNoteViewMode(mode) {
+  noteViewMode = mode;
+  const wrap = document.querySelector('.notes-editor-wrap');
+  if (wrap) {
+    wrap.classList.remove('edit-mode', 'preview-mode');
+    wrap.classList.add(mode + '-mode');
+  }
+  document.querySelectorAll('.notes-view-toggle .btn-toggle').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  if (mode === 'preview') {
+    const editor = document.getElementById('noteEditor');
+    const preview = document.getElementById('notePreview');
+    if (editor && preview && typeof marked !== 'undefined') {
+      preview.innerHTML = marked.parse(editor.value || '*暂无内容*');
+    }
+  }
+}
+
 function renderNotePanel() {
   const container = document.getElementById('notesContainer');
   const ids = Object.keys(tagDefs);
@@ -1416,7 +1464,13 @@ function renderNotePanel() {
           <h4><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${t.color};margin-right:6px;vertical-align:middle"></span>${t.name}</h4>
           <div class="meta">关联 ${related.length} 题 · ${updated}</div>
         </div>
-        <div class="notes-editor-wrap">
+        <div class="notes-toolbar">
+          <div class="notes-view-toggle">
+            <button type="button" class="btn-toggle${noteViewMode === 'edit' ? ' active' : ''}" data-mode="edit">✏️ 编辑</button>
+            <button type="button" class="btn-toggle${noteViewMode === 'preview' ? ' active' : ''}" data-mode="preview">👁 预览</button>
+          </div>
+        </div>
+        <div class="notes-editor-wrap ${noteViewMode}-mode">
           <textarea id="noteEditor" placeholder="在此编写 Markdown 笔记…"></textarea>
           <div class="notes-preview" id="notePreview">${previewHtml}</div>
         </div>
@@ -1434,14 +1488,14 @@ function renderNotePanel() {
     });
   });
 
+  container.querySelectorAll('.notes-view-toggle .btn-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => setNoteViewMode(btn.dataset.mode));
+  });
+
   const editor = document.getElementById('noteEditor');
   editor.value = noteMd;
   editor.addEventListener('input', () => {
-    const md = editor.value;
-    if (typeof marked !== 'undefined') {
-      document.getElementById('notePreview').innerHTML = marked.parse(md || '*暂无内容*');
-    }
-    store.saveTagNote(selectedNoteTagId, md);
+    store.saveTagNote(selectedNoteTagId, editor.value);
     syncFromStore();
     renderTagMgr();
   });
@@ -1482,6 +1536,24 @@ document.getElementById('problemList').addEventListener('click', (e) => {
   const cb = e.target.closest('.cb');
   if (cb) {
     toggleComplete(parseInt(cb.dataset.id));
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    store.flushSync();
+  } else {
+    store.pullFromCloud().then((pulled) => {
+      if (pulled) {
+        syncFromStore();
+        updateSyncBar(store.getSyncStatus());
+        updatePickerStats();
+        renderHeatmap();
+        refreshList();
+        buildTagFilterOptions();
+        renderTagMgr();
+      }
+    });
   }
 });
 

@@ -20,7 +20,13 @@
   let pickedIds = new Set();
 
   let pushTimer = null;
+  let pullTimer = null;
   const noteSaveTimers = {};
+  let onDataChange = null;
+
+  const PUSH_DEBOUNCE_MS = 400;
+  const NOTE_PUSH_DEBOUNCE_MS = 300;
+  const PULL_INTERVAL_MS = 15000;
 
   function localYMD(d) {
     const y = d.getFullYear();
@@ -259,17 +265,45 @@
     }
   }
 
+  function markLocalDirty() {
+    const meta = loadSyncMeta();
+    if (!meta.pendingOps.includes('full')) meta.pendingOps.push('full');
+    saveSyncMeta(meta);
+    if (supabase) setStatus('syncing');
+  }
+
   function schedulePush() {
     if (!supabase) return;
+    setStatus('syncing');
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => {
       pushToCloud();
-    }, 800);
+    }, PUSH_DEBOUNCE_MS);
   }
 
   function persistAndSync() {
+    markLocalDirty();
     persistCache();
     schedulePush();
+  }
+
+  function notifyDataChange() {
+    if (onDataChange) onDataChange();
+  }
+
+  function startPeriodicPull() {
+    if (!supabase) return;
+    clearInterval(pullTimer);
+    pullTimer = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      const meta = loadSyncMeta();
+      if (meta.pendingOps.length > 0) return;
+      const pulled = await pullFromCloud();
+      if (pulled) {
+        setStatus('synced');
+        notifyDataChange();
+      }
+    }, PULL_INTERVAL_MS);
   }
 
   async function flushPendingOps() {
@@ -308,6 +342,8 @@
     if (!pulled && meta.pendingOps.length === 0) {
       schedulePush();
     }
+
+    startPeriodicPull();
   }
 
   const store = {
@@ -316,6 +352,9 @@
     getSyncStatus: () => syncStatus,
     setOnStatusChange(fn) {
       onStatusChange = fn;
+    },
+    setOnDataChange(fn) {
+      onDataChange = fn;
     },
 
     getTagDefs: () => tagDefs,
@@ -354,11 +393,12 @@
       if (!tagDefs[tagId]) return;
       tagDefs[tagId].noteMd = noteMd;
       tagDefs[tagId].noteUpdatedAt = todayStr();
+      markLocalDirty();
       persistCache();
       clearTimeout(noteSaveTimers[tagId]);
       noteSaveTimers[tagId] = setTimeout(() => {
         schedulePush();
-      }, 500);
+      }, NOTE_PUSH_DEBOUNCE_MS);
     },
 
     importFromJson(data) {
