@@ -22,15 +22,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Generate config.js from secrets
-        run: |
-          cat > config.js <<EOF
-          window.CONFIG = {
-            SUPABASE_URL: '${{ secrets.SUPABASE_URL }}',
-            SUPABASE_ANON_KEY: '${{ secrets.SUPABASE_ANON_KEY }}',
-          };
-          EOF
+      # config.js 已提交到仓库（仅含 publishable key）；无需 Actions Secrets
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
