@@ -1553,7 +1553,7 @@ document.addEventListener('visibilitychange', () => {
     store.flushSync();
   } else {
     store.pullFromCloud().then((pulled) => {
-      if (pulled) applyCloudDataToUI();
+      if (pulled?.applied) applyCloudDataToUI();
     });
   }
 });

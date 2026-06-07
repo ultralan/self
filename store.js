@@ -148,11 +148,14 @@
     return !!supabase;
   }
 
+  function hasPendingLocalChanges() {
+    return loadSyncMeta().pendingOps.length > 0;
+  }
+
   async function pullFromCloud() {
-    if (!supabase) return false;
+    if (!supabase || pushInFlight) return { ok: false, applied: false };
     try {
-      const meta = loadSyncMeta();
-      if (meta.pendingOps.length > 0) return false;
+      if (hasPendingLocalChanges()) return { ok: false, applied: false };
 
       const [tagsRes, ptRes, compRes, pickRes, metaRes] = await Promise.all([
         supabase.from('tag_defs').select('*'),
@@ -167,7 +170,16 @@
       if (compRes.error) throw compRes.error;
       if (pickRes.error) throw pickRes.error;
 
+      // 拉取过程中若产生本地修改，放弃覆盖（双向管道：本地待上传优先）
+      if (hasPendingLocalChanges()) return { ok: false, applied: false };
+
       const cloudUpdatedAt = metaRes.data?.updated_at || null;
+      const meta = loadSyncMeta();
+      const cloudIsNewer =
+        !meta.cloudUpdatedAt || !cloudUpdatedAt || cloudUpdatedAt > meta.cloudUpdatedAt;
+
+      if (!cloudIsNewer) return { ok: true, applied: false };
+
       applyCloudSnapshot(
         tagsRes.data,
         ptRes.data,
@@ -175,10 +187,10 @@
         pickRes.data,
         cloudUpdatedAt
       );
-      return true;
+      return { ok: true, applied: true };
     } catch (e) {
       console.warn('pullFromCloud failed', e);
-      return false;
+      return { ok: false, applied: false };
     }
   }
 
@@ -193,11 +205,11 @@
     try {
       const tagRows = tagDefsToRows();
 
+      // 全量替换：删除的标签必须从云端清掉（upsert 无法表达删除）
+      const { error: delTags } = await supabase.from('tag_defs').delete().neq('id', '');
+      if (delTags) throw delTags;
       if (tagRows.length > 0) {
-        const { error } = await supabase.from('tag_defs').upsert(tagRows, { onConflict: 'id' });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('tag_defs').delete().neq('id', '');
+        const { error } = await supabase.from('tag_defs').insert(tagRows);
         if (error) throw error;
       }
 
@@ -251,6 +263,7 @@
       });
       persistCache();
       setStatus('synced');
+      notifyDataChange();
       return true;
     } catch (e) {
       console.warn('pushToCloud failed', e);
@@ -275,20 +288,24 @@
     if (supabase) setStatus('syncing');
   }
 
-  function schedulePush() {
+  function schedulePush(immediate = false) {
     if (!supabase) return;
     setStatus('syncing');
     clearTimeout(pushTimer);
+    if (immediate) {
+      pushToCloud();
+      return;
+    }
     pushTimer = setTimeout(() => {
       pushToCloud();
     }, PUSH_DEBOUNCE_MS);
   }
 
-  function persistAndSync() {
+  function persistAndSync({ immediate = false } = {}) {
     if (!canWrite()) return;
     markLocalDirty();
     persistCache();
-    schedulePush();
+    schedulePush(immediate);
   }
 
   function notifyDataChange() {
@@ -300,16 +317,16 @@
     clearInterval(pullTimer);
     pullTimer = setInterval(async () => {
       if (typeof document !== 'undefined' && document.hidden) return;
-      const meta = loadSyncMeta();
-      if (meta.pendingOps.length > 0) {
-        const pushed = await pushToCloud();
-        if (pushed) notifyDataChange();
+      if (hasPendingLocalChanges() || pushInFlight) {
+        await pushToCloud();
         return;
       }
       const pulled = await pullFromCloud();
-      if (pulled) {
+      if (pulled.ok && pulled.applied) {
         setStatus('synced');
         notifyDataChange();
+      } else if (pulled.ok) {
+        setStatus('synced');
       }
     }, PULL_INTERVAL_MS);
   }
@@ -344,7 +361,11 @@
     }
 
     const pulled = await pullFromCloud();
-    if (pulled) {
+    if (pulled.applied) {
+      setStatus('synced');
+      notifyDataChange();
+    } else if (pulled.ok) {
+      loadFromCache();
       setStatus('synced');
       notifyDataChange();
     } else {
@@ -379,7 +400,7 @@
       for (const [id, t] of Object.entries(obj)) {
         tagDefs[id] = normalizeTagDef({ ...t, id });
       }
-      persistAndSync();
+      persistAndSync({ immediate: true });
     },
 
     saveProblemTags(obj) {
@@ -431,7 +452,7 @@
       const meta = loadSyncMeta();
       meta.pendingOps = ['full'];
       saveSyncMeta(meta);
-      schedulePush();
+      schedulePush(true);
     },
 
     exportToJson() {
@@ -451,7 +472,7 @@
       if (!canWrite()) return;
       completedMap = new Map();
       pickedIds = new Set();
-      persistAndSync();
+      persistAndSync({ immediate: true });
     },
 
     resetAll() {
@@ -464,7 +485,7 @@
       const meta = loadSyncMeta();
       meta.pendingOps = ['full'];
       saveSyncMeta(meta);
-      schedulePush();
+      schedulePush(true);
     },
 
     flushSync: () => pushToCloud(),
