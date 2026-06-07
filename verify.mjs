@@ -73,6 +73,22 @@ for (const needle of ['sync-db.js', 'store.js', 'panel-notes', 'createStore', 'e
   }
 }
 
+const layoutNeedles = [
+  'height: 100dvh',
+  'overflow: hidden',
+  '.app-body',
+  'min-height: 0',
+  'height: 100%',
+  '.problem-list-scroll',
+  'overflow-y: auto',
+];
+for (const needle of layoutNeedles) {
+  if (!indexHtml.includes(needle)) {
+    console.error('single-screen layout missing:', needle);
+    ok = false;
+  }
+}
+
 const syncDbJs = fs.readFileSync(path.join(__dirname, 'sync-db.js'), 'utf8');
 for (const needle of ['createSyncDB', 'commit', 'localRev', 'syncedRev', 'deleteTag']) {
   if (!syncDbJs.includes(needle)) {

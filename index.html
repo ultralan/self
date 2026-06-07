@@ -11,20 +11,36 @@
     background: #f5f5f5;
     display: flex;
     justify-content: center;
-    padding: 24px 16px;
-    min-height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    padding: 16px;
     color: #333;
   }
   .app {
     max-width: 800px;
     width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
   .header {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
   }
   .header h1 { font-size: 22px; color: #1a1a1a; }
   .header .subtitle { color: #888; font-size: 13px; margin-top: 4px; }
+  .app-toolbar {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .app-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
 
   /* Tabs */
   .tabs {
@@ -33,7 +49,8 @@
     background: #e8e8e8;
     border-radius: 12px;
     padding: 4px;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
   }
   .tab {
     flex: 1;
@@ -55,16 +72,27 @@
   }
   .tab:not(.active):hover { color: #333; }
 
-  .panel { display: none; }
-  .panel.active { display: block; }
+  .panel { display: none; min-height: 0; }
+  .panel.active {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
 
   /* Card base */
   .card {
     background: white;
     border-radius: 14px;
-    padding: 28px 24px;
+    padding: 20px 22px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    margin-bottom: 16px;
+    margin-bottom: 0;
+    min-height: 0;
+  }
+  .panel > .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
   .card-title {
     font-size: 15px;
@@ -77,9 +105,9 @@
   .problem-card {
     background: #fafafa;
     border-radius: 12px;
-    padding: 32px 24px;
-    margin-bottom: 16px;
-    min-height: 140px;
+    padding: 24px 20px;
+    margin-bottom: 14px;
+    min-height: 128px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -130,7 +158,7 @@
   .filter-btn:hover:not(.active) { background: #f5f5f5; }
   .stats-row {
     display: flex; gap: 16px; justify-content: center;
-    font-size: 13px; color: #888; margin-top: 16px; flex-wrap: wrap;
+    font-size: 13px; color: #888; margin-top: 12px; flex-wrap: wrap;
   }
   .stats-row strong { color: #333; }
 
@@ -238,7 +266,7 @@
 
   /* Scrollbar */
   .problem-list-scroll {
-    max-height: 600px; overflow-y: auto;
+    flex: 1; min-height: 0; overflow-y: auto;
   }
   .problem-list-scroll::-webkit-scrollbar { width: 6px; }
   .problem-list-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -246,8 +274,9 @@
 
   .message-bar {
     background: #f0fdf4; color: #166534; font-size: 13px;
-    padding: 8px 14px; border-radius: 8px; margin-bottom: 12px;
+    padding: 8px 14px; border-radius: 8px; margin-bottom: 10px;
     display: none; text-align: center;
+    flex-shrink: 0;
   }
   .message-bar.show { display: block; }
 
@@ -418,6 +447,7 @@
   .sync-bar {
     font-size: 12px; padding: 6px 12px; border-radius: 8px;
     margin-bottom: 10px; text-align: center; display: none;
+    flex-shrink: 0;
   }
   .sync-bar.show { display: block; }
   .sync-bar.synced { background: #f0fdf4; color: #166534; }
@@ -427,12 +457,12 @@
 
   /* Notes Tab */
   .notes-layout {
-    display: flex; gap: 16px; min-height: 480px;
+    flex: 1; display: flex; gap: 16px; min-height: 0;
   }
   .notes-sidebar {
     width: 160px; flex-shrink: 0;
     border-right: 1px solid #eee; padding-right: 12px;
-    max-height: 520px; overflow-y: auto;
+    min-height: 0; overflow-y: auto;
   }
   .notes-sidebar-item {
     display: flex; align-items: center; gap: 8px;
@@ -446,7 +476,7 @@
     width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
   }
   .notes-sidebar-item .note-icon { margin-left: auto; font-size: 11px; opacity: 0.7; }
-  .notes-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .notes-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
   .notes-header {
     margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee;
   }
@@ -467,17 +497,17 @@
     background: #2563eb; border-color: #2563eb; color: #fff;
   }
   .notes-editor-wrap {
-    flex: 1; min-height: 360px; display: flex; flex-direction: column;
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
   }
   .notes-editor-wrap textarea {
-    flex: 1; width: 100%; min-height: 360px; padding: 12px;
+    flex: 1; width: 100%; min-height: 0; padding: 12px;
     border: 1px solid #ddd; border-radius: 8px; font-size: 13px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     resize: vertical; outline: none; line-height: 1.5;
   }
   .notes-editor-wrap textarea:focus { border-color: #2563eb; }
   .notes-preview {
-    flex: 1; width: 100%; min-height: 360px; padding: 12px 14px;
+    flex: 1; width: 100%; min-height: 0; padding: 12px 14px;
     border: 1px solid #eee; border-radius: 8px; background: #fafafa;
     overflow-y: auto; font-size: 14px; line-height: 1.6;
   }
@@ -503,8 +533,16 @@
   .mgr-item .tname { cursor: pointer; }
   .mgr-item .tname:hover { color: #2563eb; }
   @media (max-width: 640px) {
+    body { padding: 10px; }
+    .header { margin-bottom: 8px; }
+    .header h1 { font-size: 18px; }
+    .header .subtitle { font-size: 12px; }
+    .tab { padding: 8px 6px; font-size: 12px; }
+    .card { padding: 14px 12px; border-radius: 10px; }
+    .problem-card { padding: 18px 12px; min-height: 112px; }
+    .problem-title { font-size: 17px; }
     .notes-layout { flex-direction: column; }
-    .notes-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #eee; padding-bottom: 12px; max-height: 160px; }
+    .notes-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #eee; padding-bottom: 12px; max-height: 120px; }
   }
 </style>
 </head>
@@ -515,13 +553,14 @@
     <div class="subtitle">Top 100 Liked × Top Interview 150 · 182 题</div>
   </div>
 
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+  <div class="app-toolbar">
     <button class="btn btn-outline btn-sm" id="tagMgrBtn">🏷️ 标签管理</button>
     <button class="btn btn-outline btn-sm" id="dataMgrBtn">💾 数据管理</button>
   </div>
 
   <div class="sync-bar" id="syncBar"></div>
 
+  <div class="app-body">
   <div class="tabs">
     <button class="tab active" data-tab="picker">🎲 抽题</button>
     <button class="tab" data-tab="list">📋 题库</button>
@@ -615,6 +654,7 @@
   </div>
 
   <div class="hm-tooltip" id="hmTooltip"></div>
+  </div>
 </div>
 
 <!-- ====== Tag Picker Overlay ====== -->
