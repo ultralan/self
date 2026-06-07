@@ -21,6 +21,8 @@
 
   let pushTimer = null;
   let pullTimer = null;
+  let pushInFlight = false;
+  let pushAgain = false;
   const noteSaveTimers = {};
   let onDataChange = null;
 
@@ -193,6 +195,11 @@
 
   async function pushToCloud() {
     if (!supabase) return false;
+    if (pushInFlight) {
+      pushAgain = true;
+      return false;
+    }
+    pushInFlight = true;
     setStatus('syncing');
     try {
       const tagRows = tagDefsToRows();
@@ -262,6 +269,12 @@
       saveSyncMeta(meta);
       setStatus('offline');
       return false;
+    } finally {
+      pushInFlight = false;
+      if (pushAgain) {
+        pushAgain = false;
+        schedulePush();
+      }
     }
   }
 

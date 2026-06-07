@@ -276,8 +276,9 @@
     position: fixed; inset: 0; z-index: 50;
     background: rgba(0,0,0,0.2); display: none;
     align-items: center; justify-content: center;
+    pointer-events: none;
   }
-  .picker-overlay.show { display: flex; }
+  .picker-overlay.show { display: flex; pointer-events: auto; }
   .picker-dialog {
     background: white; border-radius: 12px; padding: 20px;
     min-width: 300px; max-width: 420px;
@@ -325,8 +326,9 @@
     position: fixed; inset: 0; z-index: 60;
     background: rgba(0,0,0,0.3); display: none;
     align-items: center; justify-content: center;
+    pointer-events: none;
   }
-  .mgr-overlay.show { display: flex; }
+  .mgr-overlay.show { display: flex; pointer-events: auto; }
   .mgr-dialog {
     background: white; border-radius: 14px; padding: 24px;
     min-width: 360px; max-width: 460px;
@@ -377,8 +379,9 @@
     position: fixed; inset: 0; z-index: 60;
     background: rgba(0,0,0,0.3); display: none;
     align-items: center; justify-content: center;
+    pointer-events: none;
   }
-  .data-overlay.show { display: flex; }
+  .data-overlay.show { display: flex; pointer-events: auto; }
   .data-dialog {
     background: white; border-radius: 14px; padding: 24px;
     min-width: 360px; max-width: 460px;
@@ -707,6 +710,7 @@ let problemTags = {};
 let tagPickerProblemId = null;
 let selectedNoteTagId = null;
 let noteViewMode = 'edit';
+let noteEditing = false;
 
 function updateSyncBar(status) {
   const bar = document.getElementById('syncBar');
@@ -720,19 +724,22 @@ function updateSyncBar(status) {
   bar.className = 'sync-bar show ' + (status || 'no-config');
 }
 store.setOnStatusChange(updateSyncBar);
-store.setOnDataChange(() => {
-  syncFromStore();
-  updateSyncBar(store.getSyncStatus());
-  updatePickerStats();
-  renderHeatmap();
-  refreshList();
-  buildTagFilterOptions();
-  renderTagMgr();
-  const notesActive = document.querySelector('.tab[data-tab="notes"]')?.classList.contains('active');
-  const editor = document.getElementById('noteEditor');
-  if (notesActive && editor && document.activeElement === editor) return;
-  if (notesActive) renderNotePanel();
-});
+
+function applyCloudDataToUI() {
+  try {
+    syncFromStore();
+    updateSyncBar(store.getSyncStatus());
+    updatePickerStats();
+    renderHeatmap();
+    refreshList();
+    buildTagFilterOptions();
+    renderTagMgr();
+    const notesActive = document.querySelector('.tab[data-tab="notes"]')?.classList.contains('active');
+    if (notesActive && !noteEditing) renderNotePanel();
+  } catch (err) {
+    console.warn('applyCloudDataToUI failed', err);
+  }
+}
 
 function genTagId() { return 't' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
 
@@ -1406,6 +1413,7 @@ function getProblemsForTag(tagId) {
 }
 
 function setNoteViewMode(mode) {
+  if (!mode) mode = 'edit';
   noteViewMode = mode;
   const wrap = document.querySelector('.notes-editor-wrap');
   if (wrap) {
@@ -1481,25 +1489,26 @@ function renderNotePanel() {
       </div>
     </div>`;
 
-  container.querySelectorAll('.notes-sidebar-item').forEach(el => {
-    el.addEventListener('click', () => {
-      selectedNoteTagId = el.dataset.tid;
-      renderNotePanel();
-    });
-  });
-
-  container.querySelectorAll('.notes-view-toggle .btn-toggle').forEach((btn) => {
-    btn.addEventListener('click', () => setNoteViewMode(btn.dataset.mode));
-  });
-
   const editor = document.getElementById('noteEditor');
   editor.value = noteMd;
-  editor.addEventListener('input', () => {
+  editor.onfocus = () => { noteEditing = true; };
+  editor.onblur = () => { noteEditing = false; };
+  editor.oninput = () => {
     store.saveTagNote(selectedNoteTagId, editor.value);
     syncFromStore();
-    renderTagMgr();
-  });
+  };
 }
+
+document.getElementById('notesContainer').addEventListener('click', (e) => {
+  const sidebar = e.target.closest('.notes-sidebar-item');
+  if (sidebar) {
+    selectedNoteTagId = sidebar.dataset.tid;
+    renderNotePanel();
+    return;
+  }
+  const toggle = e.target.closest('.notes-view-toggle .btn-toggle');
+  if (toggle) setNoteViewMode(toggle.dataset.mode);
+});
 
 document.getElementById('card').addEventListener('click', (e) => {
   const badge = e.target.closest('.tag-badge[data-open-note]');
@@ -1544,28 +1553,31 @@ document.addEventListener('visibilitychange', () => {
     store.flushSync();
   } else {
     store.pullFromCloud().then((pulled) => {
-      if (pulled) {
-        syncFromStore();
-        updateSyncBar(store.getSyncStatus());
-        updatePickerStats();
-        renderHeatmap();
-        refreshList();
-        buildTagFilterOptions();
-        renderTagMgr();
-      }
+      if (pulled) applyCloudDataToUI();
     });
   }
 });
 
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  document.getElementById('tagPickerOverlay').classList.remove('show');
+  document.getElementById('tagMgrOverlay').classList.remove('show');
+  document.getElementById('dataMgrOverlay').classList.remove('show');
+});
+
 // ====== INIT ======
 (async function initApp() {
-  await store.init();
-  syncFromStore();
-  updateSyncBar(store.getSyncStatus());
-  updatePickerStats();
-  renderHeatmap();
-  refreshList();
-  buildTagFilterOptions();
+  try {
+    store.setOnDataChange(applyCloudDataToUI);
+    await store.init();
+    applyCloudDataToUI();
+  } catch (err) {
+    console.error('initApp failed', err);
+    syncFromStore();
+    updateSyncBar(store.getSyncStatus());
+    updatePickerStats();
+    refreshList();
+  }
 })();
 </script>
 </body>
