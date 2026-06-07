@@ -46,6 +46,7 @@ function exportToJson(state) {
 
 const requiredFiles = [
   'schema.sql',
+  'sync-db.js',
   'store.js',
   'config.example.js',
   '.gitignore',
@@ -64,9 +65,17 @@ for (const f of requiredFiles) {
 }
 
 const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-for (const needle of ['store.js', 'panel-notes', 'createStore', 'exportToJson', 'importFromJson']) {
+for (const needle of ['sync-db.js', 'store.js', 'panel-notes', 'createStore', 'exportToJson', 'importFromJson', 'deleteTag']) {
   if (!indexHtml.includes(needle)) {
     console.error('index.html missing:', needle);
+    ok = false;
+  }
+}
+
+const syncDbJs = fs.readFileSync(path.join(__dirname, 'sync-db.js'), 'utf8');
+for (const needle of ['createSyncDB', 'commit', 'localRev', 'syncedRev', 'deleteTag']) {
+  if (!syncDbJs.includes(needle)) {
+    console.error('sync-db.js missing:', needle);
     ok = false;
   }
 }

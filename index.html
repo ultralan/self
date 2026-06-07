@@ -677,6 +677,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="data.js"></script>
+<script src="sync-db.js"></script>
 <script src="store.js"></script>
 <script>
 // ====== DATA ======
@@ -698,10 +699,10 @@ function syncFromStore() {
   problemTags = store.getProblemTags();
 }
 
-function savePicked(set) { store.savePickedIds(set); syncFromStore(); }
-function saveCompleted(map) { store.saveCompleted(map); syncFromStore(); }
-function saveTags(obj) { store.saveTags(obj); syncFromStore(); }
-function saveProblemTags(obj) { store.saveProblemTags(obj); syncFromStore(); }
+function savePicked(set) { return store.savePickedIds(set).then(() => syncFromStore()); }
+function saveCompleted(map) { return store.saveCompleted(map).then(() => syncFromStore()); }
+function saveTags(obj) { return store.saveTags(obj).then(() => syncFromStore()); }
+function saveProblemTags(obj) { return store.saveProblemTags(obj).then(() => syncFromStore()); }
 
 let pickedIds = new Set();
 let completedMap = new Map();
@@ -1147,18 +1148,13 @@ mgrOverlay.addEventListener('click', (e) => {
 });
 document.getElementById('tagMgrClose').addEventListener('click', closeTagMgr);
 document.getElementById('tagMgrBtn').addEventListener('click', openTagMgr);
-document.getElementById('tagMgrList').addEventListener('click', (e) => {
+document.getElementById('tagMgrList').addEventListener('click', async (e) => {
   const btn = e.target.closest('.del-btn');
   if (!btn) return;
   const tid = btn.dataset.tid;
   if (!confirm(`确定删除标签「${tagDefs[tid]?.name}」？`)) return;
-  // Remove from all problems
-  for (const pid in problemTags) {
-    problemTags[pid] = problemTags[pid].filter(id => id !== tid);
-  }
-  saveProblemTags(problemTags);
-  delete tagDefs[tid];
-  saveTags(tagDefs);
+  await store.deleteTag(tid);
+  syncFromStore();
   if (selectedNoteTagId === tid) selectedNoteTagId = null;
   renderTagMgr();
   buildTagFilterOptions();
@@ -1181,14 +1177,14 @@ function exportData() {
 
 function importData(file) {
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const data = JSON.parse(e.target.result);
       if (!data.lcCompleted && !data.lcTagDefs) {
         showDataMsg('❌ 无效的备份文件', false);
         return;
       }
-      store.importFromJson(data);
+      await store.importFromJson(data);
       syncFromStore();
       updatePickerStats();
       refreshList();
@@ -1228,9 +1224,9 @@ document.getElementById('importFileInput').addEventListener('change', (e) => {
     e.target.value = '';
   }
 });
-document.getElementById('resetCompletedBtn').addEventListener('click', () => {
+document.getElementById('resetCompletedBtn').addEventListener('click', async () => {
   if (!confirm('确定重置所有完成记录？此操作不可撤销。')) return;
-  store.resetCompleted();
+  await store.resetCompleted();
   syncFromStore();
   updatePickerStats();
   refreshList();
@@ -1552,9 +1548,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     store.flushSync();
   } else {
-    store.pullFromCloud().then((pulled) => {
-      if (pulled?.applied) applyCloudDataToUI();
-    });
+    store.tick().then(() => syncFromStore());
   }
 });
 
