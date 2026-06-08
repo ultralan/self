@@ -22,7 +22,7 @@
       saveTags: (obj) => db.saveTags(obj),
       saveCompleted: (map) => db.saveCompleted(map),
       savePickedIds: (set) => db.savePickedIds(set),
-      saveTagNote: (id, md) => db.saveTagNote(id, md),
+      saveTagNote: (id, md, options) => db.saveTagNote(id, md, options),
       addProblemTag: (problemId, tagId) => db.addProblemTag(problemId, tagId),
       removeProblemTag: (problemId, tagId) => db.removeProblemTag(problemId, tagId),
 

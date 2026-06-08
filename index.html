@@ -541,6 +541,29 @@
   .notes-view-toggle .btn-toggle.active {
     background: #2563eb; border-color: #2563eb; color: #fff;
   }
+  .note-save-area {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .note-save-status {
+    display: inline-flex; align-items: center;
+    min-height: 28px; padding: 4px 9px; border-radius: 999px;
+    font-size: 12px; color: #666; background: #f5f5f5;
+  }
+  .note-save-status.saved { background: #f0fdf4; color: #166534; }
+  .note-save-status.dirty { background: #fffbeb; color: #92400e; }
+  .note-save-status.saving { background: #eff6ff; color: #1d4ed8; }
+  .note-save-status.conflict { background: #fef2f2; color: #991b1b; }
+  .note-save-status.error { background: #fef2f2; color: #991b1b; }
+  .note-save-action {
+    display: none;
+    padding: 5px 10px; font-size: 12px; font-weight: 500;
+    border: 1px solid #ddd; border-radius: 6px; background: #fff;
+    color: #555; cursor: pointer;
+  }
+  .note-save-action.show { display: inline-flex; }
+  .note-save-action:hover { background: #f5f5f5; }
+  .note-save-action.danger { border-color: #fecaca; color: #991b1b; }
   .notes-editor-wrap {
     flex: 1; min-height: 260px; display: flex; flex-direction: column;
   }
@@ -834,7 +857,7 @@ let problemTags = {};
 let tagPickerProblemId = null;
 let selectedNoteTagId = null;
 let noteViewMode = 'preview';
-let noteEditing = false;
+const noteDrafts = new Map();
 
 function updateSyncBar(status) {
   const bar = document.getElementById('syncBar');
@@ -852,6 +875,7 @@ store.setOnStatusChange(updateSyncBar);
 function applyCloudDataToUI() {
   try {
     syncFromStore();
+    syncNoteDraftsFromCloud();
     updateSyncBar(store.getSyncStatus());
     updatePickerStats();
     renderHeatmap();
@@ -860,7 +884,11 @@ function applyCloudDataToUI() {
     renderTagMgr();
     renderSnapshotList();
     const notesActive = document.querySelector('.tab[data-tab="notes"]')?.classList.contains('active');
-    if (notesActive && !noteEditing) renderNotePanel();
+    if (notesActive && canRenderActiveNote()) {
+      renderNotePanel();
+    } else if (notesActive && selectedNoteTagId) {
+      setNoteSaveState(selectedNoteTagId);
+    }
   } catch (err) {
     console.warn('applyCloudDataToUI failed', err);
   }
@@ -1645,6 +1673,146 @@ function getProblemsForTag(tagId) {
   return out.sort((a, b) => a.id - b.id);
 }
 
+function getNoteDraft(tagId) {
+  const tag = tagDefs[tagId] || {};
+  if (!noteDrafts.has(tagId)) {
+    noteDrafts.set(tagId, {
+      value: tag.noteMd || '',
+      baseValue: tag.noteMd || '',
+      baseUpdatedAt: tag.updatedAt || null,
+      dirty: false,
+      saving: false,
+      conflict: false,
+      remote: null,
+      saveTimer: null,
+      error: '',
+    });
+  }
+  return noteDrafts.get(tagId);
+}
+
+function syncNoteDraftsFromCloud() {
+  for (const [tagId, tag] of Object.entries(tagDefs)) {
+    const draft = getNoteDraft(tagId);
+    const remoteValue = tag.noteMd || '';
+    const remoteUpdatedAt = tag.updatedAt || null;
+    const remoteChanged = remoteUpdatedAt !== draft.baseUpdatedAt && remoteValue !== draft.baseValue;
+    if (!draft.dirty && !draft.saving && !draft.conflict) {
+      draft.value = remoteValue;
+      draft.baseValue = remoteValue;
+      draft.baseUpdatedAt = remoteUpdatedAt;
+      draft.remote = null;
+      draft.error = '';
+    } else if (remoteChanged) {
+      draft.remote = { value: remoteValue, updatedAt: remoteUpdatedAt };
+      if (draft.dirty || draft.saving) draft.conflict = true;
+    }
+  }
+  for (const tagId of [...noteDrafts.keys()]) {
+    if (!tagDefs[tagId]) noteDrafts.delete(tagId);
+  }
+}
+
+function canRenderActiveNote() {
+  if (!selectedNoteTagId) return true;
+  const draft = noteDrafts.get(selectedNoteTagId);
+  return !draft || (!draft.dirty && !draft.saving && !draft.conflict);
+}
+
+function getNoteSaveState(draft) {
+  if (!draft) return { key: 'saved', text: '已保存' };
+  if (draft.conflict) return { key: 'conflict', text: '远端已变化，保留本地草稿' };
+  if (draft.saving) return { key: 'saving', text: '保存中…' };
+  if (draft.error) return { key: 'error', text: draft.error };
+  if (draft.dirty) return { key: 'dirty', text: '未保存' };
+  return { key: 'saved', text: '已保存' };
+}
+
+function setNoteSaveState(tagId) {
+  const status = document.getElementById('noteSaveStatus');
+  if (!status) return;
+  const draft = getNoteDraft(tagId);
+  const state = getNoteSaveState(draft);
+  status.textContent = state.text;
+  status.className = `note-save-status ${state.key}`;
+  document.querySelectorAll('.note-save-action').forEach((btn) => {
+    btn.classList.toggle('show', state.key === 'conflict');
+  });
+}
+
+function renderNotePreview(value) {
+  const preview = document.getElementById('notePreview');
+  if (!preview) return;
+  preview.innerHTML = typeof marked !== 'undefined'
+    ? marked.parse(value || '*暂无内容*')
+    : (value || '暂无内容');
+}
+
+async function persistNoteDraft(tagId, { force = false } = {}) {
+  const draft = getNoteDraft(tagId);
+  if (draft.saving || (draft.conflict && !force)) return;
+  const valueToSave = draft.value;
+  draft.saving = true;
+  draft.error = '';
+  setNoteSaveState(tagId);
+  try {
+    const saved = await store.saveTagNote(tagId, valueToSave, {
+      expectedUpdatedAt: draft.baseUpdatedAt,
+      force,
+    });
+    syncFromStore();
+    const stillChanged = draft.value !== valueToSave;
+    draft.baseValue = valueToSave;
+    draft.baseUpdatedAt = saved?.updatedAt || tagDefs[tagId]?.updatedAt || draft.baseUpdatedAt;
+    draft.saving = false;
+    draft.conflict = false;
+    draft.remote = null;
+    draft.error = '';
+    draft.dirty = stillChanged;
+    if (!stillChanged) {
+      tagDefs[tagId] = {
+        ...tagDefs[tagId],
+        noteMd: valueToSave,
+        noteUpdatedAt: saved?.noteUpdatedAt || tagDefs[tagId]?.noteUpdatedAt,
+        updatedAt: draft.baseUpdatedAt,
+      };
+    } else {
+      scheduleNoteSave(tagId);
+    }
+    setNoteSaveState(tagId);
+    renderTagMgr();
+  } catch (err) {
+    draft.saving = false;
+    if (err?.code === 'note_conflict') {
+      draft.remote = {
+        value: err.latest?.noteMd || '',
+        updatedAt: err.latest?.updatedAt || null,
+      };
+      if (err.latest) tagDefs[tagId] = { ...tagDefs[tagId], ...err.latest };
+      draft.conflict = true;
+      draft.dirty = true;
+    } else {
+      draft.error = '保存失败';
+      draft.dirty = true;
+      showCloudWriteError();
+    }
+    setNoteSaveState(tagId);
+  }
+}
+
+function scheduleNoteSave(tagId) {
+  const draft = getNoteDraft(tagId);
+  if (draft.conflict) {
+    setNoteSaveState(tagId);
+    return;
+  }
+  clearTimeout(draft.saveTimer);
+  draft.saveTimer = setTimeout(() => {
+    persistNoteDraft(tagId, { force: false });
+  }, 900);
+  setNoteSaveState(tagId);
+}
+
 function setNoteViewMode(mode) {
   if (!mode) mode = 'preview';
   noteViewMode = mode;
@@ -1677,7 +1845,8 @@ function renderNotePanel() {
   }
   const t = tagDefs[selectedNoteTagId];
   const related = getProblemsForTag(selectedNoteTagId);
-  const noteMd = t.noteMd || '';
+  const draft = getNoteDraft(selectedNoteTagId);
+  const noteMd = draft.value;
   const previewHtml = typeof marked !== 'undefined' ? marked.parse(noteMd || '*暂无内容*') : (noteMd || '暂无内容');
 
   const sidebar = ids.map(id => {
@@ -1710,6 +1879,11 @@ function renderNotePanel() {
             <button type="button" class="btn-toggle${noteViewMode === 'edit' ? ' active' : ''}" data-mode="edit">✏️ 编辑</button>
             <button type="button" class="btn-toggle${noteViewMode === 'preview' ? ' active' : ''}" data-mode="preview">👁 预览</button>
           </div>
+          <div class="note-save-area">
+            <span class="note-save-status" id="noteSaveStatus">已保存</span>
+            <button type="button" class="note-save-action danger" data-note-save-action="force">覆盖远端</button>
+            <button type="button" class="note-save-action" data-note-save-action="reload">载入远端</button>
+          </div>
         </div>
         <div class="notes-editor-wrap ${noteViewMode}-mode">
           <textarea id="noteEditor" placeholder="在此编写 Markdown 笔记…"></textarea>
@@ -1724,22 +1898,16 @@ function renderNotePanel() {
 
   const editor = document.getElementById('noteEditor');
   editor.value = noteMd;
-  editor.onfocus = () => { noteEditing = true; };
-  editor.onblur = () => { noteEditing = false; };
-  let noteSaveTimer = null;
   editor.oninput = () => {
     const tagId = selectedNoteTagId;
-    const noteValue = editor.value;
-    clearTimeout(noteSaveTimer);
-    noteSaveTimer = setTimeout(async () => {
-      try {
-        await store.saveTagNote(tagId, noteValue);
-        syncFromStore();
-      } catch {
-        showCloudWriteError();
-      }
-    }, 500);
+    const activeDraft = getNoteDraft(tagId);
+    activeDraft.value = editor.value;
+    activeDraft.dirty = activeDraft.value !== activeDraft.baseValue;
+    activeDraft.error = '';
+    renderNotePreview(activeDraft.value);
+    scheduleNoteSave(tagId);
   };
+  setNoteSaveState(selectedNoteTagId);
 }
 
 document.getElementById('notesContainer').addEventListener('click', (e) => {
@@ -1751,6 +1919,26 @@ document.getElementById('notesContainer').addEventListener('click', (e) => {
   }
   const toggle = e.target.closest('.notes-view-toggle .btn-toggle');
   if (toggle) setNoteViewMode(toggle.dataset.mode);
+  const action = e.target.closest('[data-note-save-action]');
+  if (action && selectedNoteTagId) {
+    const draft = getNoteDraft(selectedNoteTagId);
+    if (action.dataset.noteSaveAction === 'force') {
+      draft.conflict = false;
+      draft.error = '';
+      persistNoteDraft(selectedNoteTagId, { force: true });
+    } else if (action.dataset.noteSaveAction === 'reload' && draft.remote) {
+      clearTimeout(draft.saveTimer);
+      draft.value = draft.remote.value;
+      draft.baseValue = draft.remote.value;
+      draft.baseUpdatedAt = draft.remote.updatedAt;
+      draft.dirty = false;
+      draft.saving = false;
+      draft.conflict = false;
+      draft.error = '';
+      draft.remote = null;
+      renderNotePanel();
+    }
+  }
 });
 
 document.getElementById('card').addEventListener('click', (e) => {

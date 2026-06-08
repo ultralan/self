@@ -113,6 +113,32 @@ for (const needle of todoUiNeedles) {
     ok = false;
   }
 }
+
+const noteSyncNeedles = [
+  'const noteDrafts = new Map()',
+  'function getNoteDraft',
+  'function scheduleNoteSave',
+  'function setNoteSaveState',
+  'data-note-save-action="force"',
+  'data-note-save-action="reload"',
+  'if (draft.conflict) return',
+];
+for (const needle of noteSyncNeedles) {
+  if (!indexHtml.includes(needle)) {
+    console.error('note sync UX missing:', needle);
+    ok = false;
+  }
+}
+for (const forbidden of [
+  'await store.saveTagNote(tagId, noteValue);\n        syncFromStore();',
+  'let noteSaveTimer = null;\n  editor.oninput',
+]) {
+  if (indexHtml.includes(forbidden)) {
+    console.error('note editor should not use old full-refresh autosave:', forbidden.split('\n')[0]);
+    ok = false;
+  }
+}
+
 if (indexHtml.includes('data-tab="heatmap"')) {
   console.error('heatmap should be migrated out of tabs');
   ok = false;
@@ -167,6 +193,12 @@ for (const needle of ['exportFreshOrCachedJson', 'cacheFallback']) {
 for (const needle of ['SNAPSHOT_LIMIT', 'persistSnapshotRecord', 'getSnapshotRecords', 'exportCachedSnapshot']) {
   if (!syncDbJs.includes(needle) && !storeJs.includes(needle)) {
     console.error('snapshot cache strategy missing:', needle);
+    ok = false;
+  }
+}
+for (const needle of ['expectedUpdatedAt', 'force: false', 'NoteConflictError', 'refresh: false']) {
+  if (!syncDbJs.includes(needle) && !storeJs.includes(needle) && !indexHtml.includes(needle)) {
+    console.error('note conflict strategy missing:', needle);
     ok = false;
   }
 }

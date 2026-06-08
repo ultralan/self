@@ -37,6 +37,7 @@
       color: tag.color || '#f97316',
       noteMd: tag.noteMd || tag.note_md || '',
       noteUpdatedAt: tag.noteUpdatedAt || tag.note_updated_at || null,
+      updatedAt: tag.updatedAt || tag.updated_at || null,
     };
   }
 
@@ -114,6 +115,7 @@
           color: r.color,
           noteMd: r.note_md,
           noteUpdatedAt: r.note_updated_at,
+          updatedAt: r.updated_at,
         });
       }
       for (const row of ptRows || []) {
@@ -262,6 +264,15 @@
       return next;
     }
 
+    class NoteConflictError extends Error {
+      constructor(latest) {
+        super('笔记远端版本已变化');
+        this.name = 'NoteConflictError';
+        this.code = 'note_conflict';
+        this.latest = latest || null;
+      }
+    }
+
     async function touchSyncMeta() {
       const { error } = await supabase
         .from('sync_meta')
@@ -269,7 +280,17 @@
       if (error) throw error;
     }
 
-    async function runCloudWrite(fn) {
+    async function fetchTagDef(tagId) {
+      const { data, error } = await supabase
+        .from('tag_defs')
+        .select('*')
+        .eq('id', tagId)
+        .limit(1);
+      if (error) throw error;
+      return data?.[0] ? normalizeTagDef(data[0]) : null;
+    }
+
+    async function runCloudWrite(fn, { refresh = true, notifyUi = true } = {}) {
       if (!supabase) {
         setStatus('offline');
         throw new Error('云端 API 不可用，操作未保存');
@@ -277,11 +298,21 @@
       return withLock(async () => {
         setStatus('syncing');
         try {
-          await fn();
+          const result = await fn();
           await touchSyncMeta();
-          await refreshFromCloud();
-          return true;
+          if (refresh) {
+            await refreshFromCloud({ notifyUi });
+          } else {
+            persistCache(state);
+            setStatus('synced');
+            if (notifyUi) notify();
+          }
+          return result ?? true;
         } catch (err) {
+          if (err?.code === 'note_conflict') {
+            setStatus('synced');
+            throw err;
+          }
           console.warn('[sync-db] cloud write failed', err);
           setStatus('offline');
           throw err;
@@ -490,18 +521,31 @@
         });
       },
 
-      async saveTagNote(tagId, noteMd) {
+      async saveTagNote(tagId, noteMd, { expectedUpdatedAt = null, force = false } = {}) {
         return runCloudWrite(async () => {
-          const { error } = await supabase
+          const now = new Date().toISOString();
+          let query = supabase
             .from('tag_defs')
             .update({
               note_md: noteMd,
               note_updated_at: todayStr(),
-              updated_at: new Date().toISOString(),
+              updated_at: now,
             })
             .eq('id', tagId);
+          if (!force && expectedUpdatedAt) {
+            query = query.eq('updated_at', expectedUpdatedAt);
+          }
+          const { data, error } = await query.select('*');
           if (error) throw error;
-        });
+          if (!data || data.length === 0) {
+            const latest = await fetchTagDef(tagId);
+            if (latest) state.tagDefs[tagId] = latest;
+            throw new NoteConflictError(latest);
+          }
+          const saved = normalizeTagDef(data[0]);
+          state.tagDefs[tagId] = saved;
+          return saved;
+        }, { refresh: false, notifyUi: false });
       },
 
       async importFromJson(data) {
