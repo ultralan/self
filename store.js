@@ -28,6 +28,8 @@
 
       importFromJson: (data) => db.importFromJson(data),
       exportFreshOrCachedJson: () => db.exportFreshOrCachedJson(),
+      getSnapshotRecords: () => db.getSnapshotRecords(),
+      exportCachedSnapshot: (id) => db.exportCachedSnapshot(id),
       resetCompleted: () => db.resetCompleted(),
       resetAll: () => db.resetAll(),
 

@@ -32,9 +32,12 @@
   .header h1 { font-size: 22px; color: #1a1a1a; }
   .header .subtitle { color: #888; font-size: 13px; margin-top: 4px; }
   .app-toolbar {
-    display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;
+    display: flex; gap: 8px; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; flex-wrap: wrap;
     flex-shrink: 0;
   }
+  .toolbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toolbar-status { margin-left: auto; flex-shrink: 0; }
   .app-body {
     flex: 1;
     min-height: 0;
@@ -161,6 +164,32 @@
     font-size: 13px; color: #888; margin-top: 12px; flex-wrap: wrap;
   }
   .stats-row strong { color: #333; }
+  .progress-wrap {
+    margin: 2px 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .progress-track {
+    flex: 1;
+    height: 8px;
+    border-radius: 999px;
+    background: #e5e7eb;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #16a34a, #2563eb);
+    transition: width 0.2s ease;
+  }
+  .progress-text {
+    min-width: 80px;
+    text-align: right;
+    font-size: 12px;
+    color: #666;
+  }
 
   .completed-badge {
     display: inline-flex; align-items: center; gap: 4px;
@@ -229,6 +258,12 @@
 
   .heatmap-container {
     overflow-x: auto; padding-bottom: 8px;
+  }
+  .picker-heatmap {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #eee;
+    min-height: 0;
   }
   .heatmap-grid {
     display: flex; gap: 3px;
@@ -445,9 +480,10 @@
 
   /* Sync status */
   .sync-bar {
-    font-size: 12px; padding: 6px 12px; border-radius: 8px;
-    margin-bottom: 10px; text-align: center; display: none;
+    font-size: 12px; padding: 6px 10px; border-radius: 999px;
+    text-align: center; display: none;
     flex-shrink: 0;
+    white-space: nowrap;
   }
   .sync-bar.show { display: block; }
   .sync-bar.synced { background: #f0fdf4; color: #166534; }
@@ -456,6 +492,12 @@
   .sync-bar.error { background: #fef2f2; color: #991b1b; }
 
   /* Notes Tab */
+  #notesContainer {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
   .notes-layout {
     flex: 1; display: flex; gap: 16px; min-height: 0;
   }
@@ -476,7 +518,10 @@
     width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
   }
   .notes-sidebar-item .note-icon { margin-left: auto; font-size: 11px; opacity: 0.7; }
-  .notes-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .notes-main {
+    flex: 1; min-width: 0; min-height: 0;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
   .notes-header {
     margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee;
   }
@@ -497,13 +542,13 @@
     background: #2563eb; border-color: #2563eb; color: #fff;
   }
   .notes-editor-wrap {
-    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    flex: 1; min-height: 260px; display: flex; flex-direction: column;
   }
   .notes-editor-wrap textarea {
     flex: 1; width: 100%; min-height: 0; padding: 12px;
     border: 1px solid #ddd; border-radius: 8px; font-size: 13px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    resize: vertical; outline: none; line-height: 1.5;
+    resize: none; outline: none; line-height: 1.5; overflow-y: auto;
   }
   .notes-editor-wrap textarea:focus { border-color: #2563eb; }
   .notes-preview {
@@ -520,7 +565,10 @@
   .notes-preview pre { background: #1a1a1a; color: #f5f5f5; padding: 12px; border-radius: 8px; overflow-x: auto; }
   .notes-preview pre code { background: none; padding: 0; color: inherit; }
   .notes-preview ul, .notes-preview ol { padding-left: 1.4em; margin: 8px 0; }
-  .notes-related { margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee; }
+  .notes-related {
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee;
+    max-height: 116px; overflow-y: auto; flex-shrink: 0;
+  }
   .notes-related h5 { font-size: 13px; color: #555; margin-bottom: 8px; }
   .notes-related a {
     display: block; font-size: 13px; color: #2563eb; text-decoration: none;
@@ -532,6 +580,27 @@
   .tag-badge.clickable:hover { filter: brightness(1.08); }
   .mgr-item .tname { cursor: pointer; }
   .mgr-item .tname:hover { color: #2563eb; }
+  .snapshot-list {
+    max-height: 152px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    background: #fafafa;
+  }
+  .snapshot-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 12px;
+    color: #555;
+  }
+  .snapshot-item:last-child { border-bottom: none; }
+  .snapshot-item .snapshot-main { flex: 1; min-width: 0; }
+  .snapshot-item .snapshot-time { color: #333; font-weight: 600; margin-bottom: 2px; }
+  .snapshot-item .snapshot-meta { color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .snapshot-empty { color: #bbb; text-align: center; padding: 18px 10px; font-size: 13px; }
   @media (max-width: 640px) {
     body { padding: 10px; }
     .header { margin-bottom: 8px; }
@@ -541,8 +610,13 @@
     .card { padding: 14px 12px; border-radius: 10px; }
     .problem-card { padding: 18px 12px; min-height: 112px; }
     .problem-title { font-size: 17px; }
+    .progress-wrap { align-items: stretch; flex-direction: column; gap: 6px; }
+    .progress-text { min-width: 0; text-align: left; }
     .notes-layout { flex-direction: column; }
     .notes-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #eee; padding-bottom: 12px; max-height: 120px; }
+    .notes-editor-wrap { min-height: 240px; }
+    .toolbar-status { width: 100%; margin-left: 0; }
+    .sync-bar { width: 100%; }
   }
 </style>
 </head>
@@ -554,17 +628,19 @@
   </div>
 
   <div class="app-toolbar">
-    <button class="btn btn-outline btn-sm" id="tagMgrBtn">🏷️ 标签管理</button>
-    <button class="btn btn-outline btn-sm" id="dataMgrBtn">💾 数据管理</button>
+    <div class="toolbar-actions">
+      <button class="btn btn-outline btn-sm" id="tagMgrBtn">🏷️ 标签管理</button>
+      <button class="btn btn-outline btn-sm" id="dataMgrBtn">💾 数据管理</button>
+    </div>
+    <div class="toolbar-status">
+      <div class="sync-bar" id="syncBar"></div>
+    </div>
   </div>
-
-  <div class="sync-bar" id="syncBar"></div>
 
   <div class="app-body">
   <div class="tabs">
     <button class="tab active" data-tab="picker">🎲 抽题</button>
     <button class="tab" data-tab="list">📋 题库</button>
-    <button class="tab" data-tab="heatmap">🔥 热力图</button>
     <button class="tab" data-tab="notes">📓 笔记</button>
   </div>
 
@@ -596,6 +672,28 @@
         <span>总题: <strong id="ptTotal">0</strong></span>
         <span>未完成: <strong id="ptUndone">0</strong></span>
         <span>已完成: <strong id="ptDone">0</strong></span>
+      </div>
+      <div class="progress-wrap" aria-label="抽题页完成进度">
+        <div class="progress-track">
+          <div class="progress-fill" id="pickerProgressFill"></div>
+        </div>
+        <div class="progress-text" id="pickerProgressText">0%</div>
+      </div>
+      <div class="picker-heatmap">
+        <div class="heatmap-header">
+          <h3>📅 刷题热力图</h3>
+          <div class="hm-stats" id="hmStats">总完成: 0 题</div>
+        </div>
+        <div class="heatmap-container" id="heatmapContainer"></div>
+        <div class="hm-legend">
+          <span>少</span>
+          <span class="hm-cell"></span>
+          <span class="hm-cell l1"></span>
+          <span class="hm-cell l2"></span>
+          <span class="hm-cell l3"></span>
+          <span class="hm-cell l4"></span>
+          <span>多</span>
+        </div>
       </div>
     </div>
   </div>
@@ -633,26 +731,6 @@
     </div>
   </div>
 
-  <!-- ====== HEATMAP PANEL ====== -->
-  <div class="panel" id="panel-heatmap">
-    <div class="card">
-      <div class="heatmap-header">
-        <h3>📅 刷题热力图</h3>
-        <div class="hm-stats" id="hmStats">总完成: 0 题</div>
-      </div>
-      <div class="heatmap-container" id="heatmapContainer"></div>
-      <div class="hm-legend">
-        <span>少</span>
-        <span class="hm-cell"></span>
-        <span class="hm-cell l1"></span>
-        <span class="hm-cell l2"></span>
-        <span class="hm-cell l3"></span>
-        <span class="hm-cell l4"></span>
-        <span>多</span>
-      </div>
-    </div>
-  </div>
-
   <div class="hm-tooltip" id="hmTooltip"></div>
   </div>
 </div>
@@ -686,6 +764,12 @@
         <label class="btn btn-import" id="importLabel">⬆ 导入数据
           <input type="file" id="importFileInput" accept=".json">
         </label>
+      </div>
+    </div>
+    <div class="section">
+      <p><strong>🗂 本地快照记录</strong></p>
+      <div class="snapshot-list" id="snapshotList">
+        <div class="snapshot-empty">暂无快照记录</div>
       </div>
     </div>
     <div class="section">
@@ -749,7 +833,7 @@ let tagDefs = {};
 let problemTags = {};
 let tagPickerProblemId = null;
 let selectedNoteTagId = null;
-let noteViewMode = 'edit';
+let noteViewMode = 'preview';
 let noteEditing = false;
 
 function updateSyncBar(status) {
@@ -774,6 +858,7 @@ function applyCloudDataToUI() {
     refreshList();
     buildTagFilterOptions();
     renderTagMgr();
+    renderSnapshotList();
     const notesActive = document.querySelector('.tab[data-tab="notes"]')?.classList.contains('active');
     if (notesActive && !noteEditing) renderNotePanel();
   } catch (err) {
@@ -842,9 +927,13 @@ let currentProblem = null; // the last picked problem
 function updatePickerStats() {
   const filtered = getFiltered(currentFilter);
   const done = filtered.filter(p => completedMap.has(p.id));
+  const doneCount = done.length;
+  const percent = filtered.length > 0 ? Math.round((doneCount / filtered.length) * 100) : 0;
   document.getElementById('ptTotal').textContent = filtered.length;
-  document.getElementById('ptUndone').textContent = filtered.length - done.length;
-  document.getElementById('ptDone').textContent = done.length;
+  document.getElementById('ptUndone').textContent = filtered.length - doneCount;
+  document.getElementById('ptDone').textContent = doneCount;
+  document.getElementById('pickerProgressFill').style.width = `${percent}%`;
+  document.getElementById('pickerProgressText').textContent = `${percent}% · ${doneCount}/${filtered.length}`;
 }
 
 function renderPickerProblem(problem) {
@@ -1167,7 +1256,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-    if (tab.dataset.tab === 'heatmap') renderHeatmap();
+    if (tab.dataset.tab === 'picker') renderHeatmap();
     if (tab.dataset.tab === 'list') refreshList();
     if (tab.dataset.tab === 'notes') renderNotePanel();
   });
@@ -1290,12 +1379,56 @@ function showDataMsg(text, isGood = true) {
   setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
+function formatSnapshotTime(iso) {
+  if (!iso) return '未知时间';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function renderSnapshotList() {
+  const list = document.getElementById('snapshotList');
+  if (!list || !store.getSnapshotRecords) return;
+  const records = store.getSnapshotRecords();
+  if (records.length === 0) {
+    list.innerHTML = '<div class="snapshot-empty">暂无快照记录</div>';
+    return;
+  }
+  list.innerHTML = records.map((record, index) => {
+    const counts = record.counts || {};
+    return `<div class="snapshot-item" data-snapshot-id="${record.id}">
+      <div class="snapshot-main">
+        <div class="snapshot-time">${index === 0 ? '最新 · ' : ''}${formatSnapshotTime(record.capturedAt)}</div>
+        <div class="snapshot-meta">完成 ${counts.completed || 0} · 已抽 ${counts.picked || 0} · 标签 ${counts.tags || 0} · 关联 ${counts.problemTags || 0}</div>
+      </div>
+      <button class="btn btn-outline btn-sm snapshot-export-btn" data-snapshot-id="${record.id}">导出</button>
+    </div>`;
+  }).join('');
+}
+
+function downloadJson(data, sourceLabel) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `leetcode-data-${sourceLabel}-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Event bindings
 const doOverlay = document.getElementById('dataMgrOverlay');
 doOverlay.addEventListener('click', (e) => { if (e.target === doOverlay) doOverlay.classList.remove('show'); });
 document.getElementById('dataMgrClose').addEventListener('click', () => doOverlay.classList.remove('show'));
 document.getElementById('dataMgrBtn').addEventListener('click', () => {
   document.getElementById('dataMsg').style.display = 'none';
+  renderSnapshotList();
   doOverlay.classList.add('show');
 });
 document.getElementById('exportBtn').addEventListener('click', exportData);
@@ -1303,6 +1436,17 @@ document.getElementById('importFileInput').addEventListener('change', (e) => {
   if (e.target.files.length > 0) {
     importData(e.target.files[0]);
     e.target.value = '';
+  }
+});
+document.getElementById('snapshotList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.snapshot-export-btn');
+  if (!btn) return;
+  try {
+    const result = store.exportCachedSnapshot(btn.dataset.snapshotId);
+    downloadJson(result.data, 'snapshot');
+    showDataMsg(`✅ 已导出 ${formatSnapshotTime(result.capturedAt)} 的本地快照`);
+  } catch {
+    showDataMsg('❌ 没有可导出的本地快照', false);
   }
 });
 document.getElementById('resetCompletedBtn').addEventListener('click', async () => {
@@ -1502,7 +1646,7 @@ function getProblemsForTag(tagId) {
 }
 
 function setNoteViewMode(mode) {
-  if (!mode) mode = 'edit';
+  if (!mode) mode = 'preview';
   noteViewMode = mode;
   const wrap = document.querySelector('.notes-editor-wrap');
   if (wrap) {

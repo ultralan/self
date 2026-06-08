@@ -13,9 +13,11 @@
     tagDefs: 'lcTagDefs',
     problemTags: 'lcProblemTags',
     syncMeta: 'lcSyncMeta',
+    snapshots: 'lcSnapshotRecords',
   };
 
   const TICK_INTERVAL_MS = 5000;
+  const SNAPSHOT_LIMIT = 8;
 
   function localYMD(d) {
     const y = d.getFullYear();
@@ -55,6 +57,27 @@
       lcCompleted: { ...(snapshot.completed || {}) },
       lcTagDefs: snapshot.tagDefs || {},
       lcProblemTags: snapshot.problemTags || {},
+    };
+  }
+
+  function stableStringify(value) {
+    if (Array.isArray(value)) {
+      return `[${value.map(stableStringify).join(',')}]`;
+    }
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value).sort().map((key) => (
+        `${JSON.stringify(key)}:${stableStringify(value[key])}`
+      )).join(',')}}`;
+    }
+    return JSON.stringify(value);
+  }
+
+  function snapshotCounts(data) {
+    return {
+      completed: Object.keys(data.lcCompleted || {}).length,
+      picked: (data.lcPickedIds || []).length,
+      tags: Object.keys(data.lcTagDefs || {}).length,
+      problemTags: Object.values(data.lcProblemTags || {}).reduce((sum, ids) => sum + (ids || []).length, 0),
     };
   }
 
@@ -102,19 +125,28 @@
         next.completed[String(r.problem_id)] = r.completed_at;
       }
       next.picked = (pickRows || []).map((r) => r.problem_id);
+      next.picked.sort((a, b) => a - b);
+      for (const ids of Object.values(next.problemTags)) {
+        ids.sort();
+      }
       return next;
     }
 
     function persistCache(snapshot) {
-      localStorage.setItem(CACHE_KEYS.picked, JSON.stringify(snapshot.picked));
-      localStorage.setItem(CACHE_KEYS.completed, JSON.stringify(snapshot.completed));
-      localStorage.setItem(CACHE_KEYS.tagDefs, JSON.stringify(snapshot.tagDefs));
-      localStorage.setItem(CACHE_KEYS.problemTags, JSON.stringify(snapshot.problemTags));
-      localStorage.setItem(CACHE_KEYS.syncMeta, JSON.stringify({
-        cacheFallback: true,
-        cloudUpdatedAt: new Date().toISOString(),
-        lastSyncedAt: new Date().toISOString(),
-      }));
+      try {
+        localStorage.setItem(CACHE_KEYS.picked, JSON.stringify(snapshot.picked));
+        localStorage.setItem(CACHE_KEYS.completed, JSON.stringify(snapshot.completed));
+        localStorage.setItem(CACHE_KEYS.tagDefs, JSON.stringify(snapshot.tagDefs));
+        localStorage.setItem(CACHE_KEYS.problemTags, JSON.stringify(snapshot.problemTags));
+        localStorage.setItem(CACHE_KEYS.syncMeta, JSON.stringify({
+          cacheFallback: true,
+          cloudUpdatedAt: new Date().toISOString(),
+          lastSyncedAt: new Date().toISOString(),
+        }));
+        persistSnapshotRecord(snapshot, 'cloud');
+      } catch (err) {
+        console.warn('[sync-db] cache fallback persist failed', err);
+      }
     }
 
     function loadCacheSnapshot() {
@@ -129,6 +161,81 @@
       }
       const problemTags = JSON.parse(localStorage.getItem(CACHE_KEYS.problemTags) || '{}');
       return { picked, completed, tagDefs, problemTags };
+    }
+
+    function loadSnapshotRecords() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(CACHE_KEYS.snapshots) || '[]');
+        return Array.isArray(raw) ? raw : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveSnapshotRecords(records) {
+      const next = records.slice(0, SNAPSHOT_LIMIT);
+      while (next.length > 0) {
+        try {
+          localStorage.setItem(CACHE_KEYS.snapshots, JSON.stringify(next));
+          return;
+        } catch (err) {
+          next.pop();
+          if (next.length === 0) throw err;
+        }
+      }
+      localStorage.removeItem(CACHE_KEYS.snapshots);
+    }
+
+    function persistSnapshotRecord(snapshot, source) {
+      const data = toExportJson(snapshot);
+      const signature = stableStringify({
+        lcPickedIds: data.lcPickedIds,
+        lcCompleted: data.lcCompleted,
+        lcTagDefs: data.lcTagDefs,
+        lcProblemTags: data.lcProblemTags,
+      });
+      const now = new Date().toISOString();
+      const records = loadSnapshotRecords();
+      if (records[0]?.signature === signature) {
+        records[0] = {
+          ...records[0],
+          capturedAt: now,
+          source,
+          counts: snapshotCounts(data),
+          data,
+        };
+        saveSnapshotRecords(records);
+        return;
+      }
+      records.unshift({
+        id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        capturedAt: now,
+        source,
+        signature,
+        counts: snapshotCounts(data),
+        data,
+      });
+      saveSnapshotRecords(records);
+    }
+
+    function getSnapshotRecords() {
+      return loadSnapshotRecords().map((record) => ({
+        id: record.id,
+        capturedAt: record.capturedAt,
+        source: record.source,
+        counts: record.counts || snapshotCounts(record.data || {}),
+      }));
+    }
+
+    function exportCachedSnapshot(id) {
+      const records = loadSnapshotRecords();
+      const record = id ? records.find((item) => item.id === id) : records[0];
+      if (!record?.data) throw new Error('没有可导出的本地快照');
+      return {
+        data: record.data,
+        source: 'cacheSnapshot',
+        capturedAt: record.capturedAt,
+      };
     }
 
     async function fetchCloud() {
@@ -419,6 +526,9 @@
           return { data: toExportJson(cached), source: 'cacheFallback' };
         }
       },
+
+      getSnapshotRecords,
+      exportCachedSnapshot,
 
       async resetCompleted() {
         return runCloudWrite(async () => {

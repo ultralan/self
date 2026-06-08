@@ -98,6 +98,40 @@ for (const needle of layoutNeedles) {
   }
 }
 
+const todoUiNeedles = [
+  'id="pickerProgressFill"',
+  'id="pickerProgressText"',
+  'class="toolbar-status"',
+  'let noteViewMode = \'preview\'',
+  '#notesContainer',
+  'id="snapshotList"',
+  'renderSnapshotList',
+];
+for (const needle of todoUiNeedles) {
+  if (!indexHtml.includes(needle)) {
+    console.error('TODO UI missing:', needle);
+    ok = false;
+  }
+}
+if (indexHtml.includes('data-tab="heatmap"')) {
+  console.error('heatmap should be migrated out of tabs');
+  ok = false;
+}
+const pickerPanelStart = indexHtml.indexOf('id="panel-picker"');
+const listPanelStart = indexHtml.indexOf('id="panel-list"');
+const heatmapContainerAt = indexHtml.indexOf('id="heatmapContainer"');
+if (pickerPanelStart === -1 || listPanelStart === -1 || heatmapContainerAt < pickerPanelStart || heatmapContainerAt > listPanelStart) {
+  console.error('heatmap should render inside picker panel');
+  ok = false;
+}
+const toolbarStart = indexHtml.indexOf('class="app-toolbar"');
+const toolbarEnd = indexHtml.indexOf('<div class="app-body">');
+const syncBarAt = indexHtml.indexOf('id="syncBar"');
+if (toolbarStart === -1 || toolbarEnd === -1 || syncBarAt < toolbarStart || syncBarAt > toolbarEnd) {
+  console.error('sync status should live in the top toolbar');
+  ok = false;
+}
+
 const syncDbJs = fs.readFileSync(path.join(__dirname, 'sync-db.js'), 'utf8');
 const storeJs = fs.readFileSync(path.join(__dirname, 'store.js'), 'utf8');
 for (const needle of ['createSyncDB', 'fetchCloud', 'persistCache', 'exportFreshOrCachedJson', 'deleteTag', 'rawMeta.cacheFallback']) {
@@ -127,6 +161,12 @@ for (const forbidden of ['saveProblemTags', 'exportToJson', 'flushSync']) {
 for (const needle of ['exportFreshOrCachedJson', 'cacheFallback']) {
   if (!indexHtml.includes(needle) && !syncDbJs.includes(needle) && !storeJs.includes(needle)) {
     console.error('cloud-first export missing:', needle);
+    ok = false;
+  }
+}
+for (const needle of ['SNAPSHOT_LIMIT', 'persistSnapshotRecord', 'getSnapshotRecords', 'exportCachedSnapshot']) {
+  if (!syncDbJs.includes(needle) && !storeJs.includes(needle)) {
+    console.error('snapshot cache strategy missing:', needle);
     ok = false;
   }
 }
