@@ -119,9 +119,12 @@ const noteSyncNeedles = [
   'function getNoteDraft',
   'function scheduleNoteSave',
   'function setNoteSaveState',
+  'function refreshActiveNoteInPlace',
   'data-note-save-action="force"',
   'data-note-save-action="reload"',
   'if (draft.conflict) return',
+  'if (notesActive && selectedNoteTagId) {',
+  'refreshActiveNoteInPlace();',
 ];
 for (const needle of noteSyncNeedles) {
   if (!indexHtml.includes(needle)) {
@@ -141,6 +144,34 @@ for (const forbidden of [
 
 if (indexHtml.includes('data-tab="heatmap"')) {
   console.error('heatmap should be migrated out of tabs');
+  ok = false;
+}
+if (indexHtml.includes('id="resetPickedBtn"') || indexHtml.includes('resetPicked()') || indexHtml.includes('重置已抽')) {
+  console.error('unused reset picked UI should be removed');
+  ok = false;
+}
+for (const needle of [
+  'let pendingCompleteProblemId = null',
+  'let pendingCompleteTagIds = new Set()',
+  'completeTagOverlay',
+  'completeWithoutTagsBtn',
+  'openCompleteTagDialog',
+  'syncPendingCompleteTags',
+  'finishCompleteWithTags',
+  'finishCompleteWithTags(pendingCompleteProblemId, { saveTags: false })',
+  'data-complete-tag-id',
+]) {
+  if (!indexHtml.includes(needle)) {
+    console.error('complete-with-tags dialog missing:', needle);
+    ok = false;
+  }
+}
+if (!indexHtml.includes('openCompleteTagDialog(currentProblem.id)')) {
+  console.error('picker completion should open tag dialog before saving');
+  ok = false;
+}
+if (!indexHtml.includes('openCompleteTagDialog(id);') || !indexHtml.includes('return;')) {
+  console.error('list completion should open tag dialog before saving');
   ok = false;
 }
 const pickerPanelStart = indexHtml.indexOf('id="panel-picker"');

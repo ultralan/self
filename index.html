@@ -385,6 +385,61 @@
   }
   .picker-dialog .new-tag-row button:hover { background: #1d4ed8; }
 
+  /* Complete Dialog */
+  .complete-overlay {
+    position: fixed; inset: 0; z-index: 55;
+    background: rgba(0,0,0,0.22); display: none;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .complete-overlay.show { display: flex; pointer-events: auto; }
+  .complete-dialog {
+    background: white; border-radius: 12px; padding: 20px;
+    width: min(460px, calc(100vw - 24px));
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  }
+  .complete-dialog h3 { font-size: 15px; margin-bottom: 8px; color: #333; }
+  .complete-dialog .close {
+    float: right; border: none; background: none;
+    font-size: 20px; cursor: pointer; color: #999; line-height: 1;
+  }
+  .complete-dialog .close:hover { color: #333; }
+  .complete-dialog .hint {
+    font-size: 12px; color: #777; margin-bottom: 12px;
+  }
+  .complete-tag-list {
+    max-height: 280px; overflow-y: auto;
+    border: 1px solid #eee; border-radius: 8px;
+    padding: 6px; background: #fafafa;
+  }
+  .complete-tag-opt {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    border: 1px solid transparent; background: transparent;
+    text-align: left; transition: all 0.12s;
+  }
+  .complete-tag-opt:hover { background: #fff; border-color: #e5e7eb; }
+  .complete-tag-opt.active {
+    background: #eff6ff; border-color: #bfdbfe;
+  }
+  .complete-tag-opt .dot {
+    width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
+  }
+  .complete-tag-opt .name {
+    flex: 1; font-size: 13px; color: #333;
+  }
+  .complete-tag-opt .check {
+    color: #2563eb; font-size: 14px; visibility: hidden;
+  }
+  .complete-tag-opt.active .check { visibility: visible; }
+  .complete-dialog .empty-msg {
+    color: #bbb; text-align: center; padding: 16px 10px; font-size: 13px;
+  }
+  .complete-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+    margin-top: 12px; flex-wrap: wrap;
+  }
+
   /* Tag Manager */
   .mgr-overlay {
     position: fixed; inset: 0; z-index: 60;
@@ -687,9 +742,6 @@
         <button class="btn btn-primary" id="pickBtn">🎲 随机抽题</button>
         <button class="btn btn-success" id="doneBtn" disabled>✅ 标记完成</button>
       </div>
-      <div class="btn-row" style="margin-top:8px">
-        <button class="btn btn-secondary" id="resetPickedBtn">🔄 重置已抽</button>
-      </div>
 
       <div class="stats-row" id="pickerStats">
         <span>总题: <strong id="ptTotal">0</strong></span>
@@ -768,6 +820,20 @@
       <input id="tagPickerNewName" type="text" placeholder="新标签名…">
       <input id="tagPickerNewColor" class="cp" type="color" value="#f97316">
       <button id="tagPickerNewBtn">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Complete Dialog Overlay ====== -->
+<div class="complete-overlay" id="completeTagOverlay">
+  <div class="complete-dialog">
+    <button class="close" id="completeTagClose">&times;</button>
+    <h3>✅ 标记完成 — <span id="completeProblemTitle" style="font-weight:400"></span></h3>
+    <div class="hint">先选要附加的标签，再确认完成。也可以直接完成，不改标签。</div>
+    <div id="completeTagList" class="complete-tag-list"></div>
+    <div class="complete-actions">
+      <button type="button" class="btn btn-secondary" id="completeWithoutTagsBtn">不改标签直接完成</button>
+      <button type="button" class="btn btn-success" id="completeConfirmBtn">完成并保存所选标签</button>
     </div>
   </div>
 </div>
@@ -855,6 +921,8 @@ let completedMap = new Map();
 let tagDefs = {};
 let problemTags = {};
 let tagPickerProblemId = null;
+let pendingCompleteProblemId = null;
+let pendingCompleteTagIds = new Set();
 let selectedNoteTagId = null;
 let noteViewMode = 'preview';
 const noteDrafts = new Map();
@@ -884,10 +952,10 @@ function applyCloudDataToUI() {
     renderTagMgr();
     renderSnapshotList();
     const notesActive = document.querySelector('.tab[data-tab="notes"]')?.classList.contains('active');
-    if (notesActive && canRenderActiveNote()) {
+    if (notesActive && selectedNoteTagId) {
+      refreshActiveNoteInPlace();
+    } else if (notesActive) {
       renderNotePanel();
-    } else if (notesActive && selectedNoteTagId) {
-      setNoteSaveState(selectedNoteTagId);
     }
   } catch (err) {
     console.warn('applyCloudDataToUI failed', err);
@@ -1017,30 +1085,95 @@ async function pickRandom() {
   }
 }
 
-async function markCurrentDone() {
+function markCurrentDone() {
   if (!currentProblem || completedMap.has(currentProblem.id)) return;
-  const today = todayStr();
+  openCompleteTagDialog(currentProblem.id);
+}
+
+function getCompleteProblem() {
+  if (!pendingCompleteProblemId) return null;
+  return allProblems.find((p) => p.id === pendingCompleteProblemId) || null;
+}
+
+function openCompleteTagDialog(problemId) {
+  pendingCompleteProblemId = problemId;
+  pendingCompleteTagIds = new Set(problemTags[problemId] || []);
+  const problem = allProblems.find((p) => p.id === problemId);
+  document.getElementById('completeProblemTitle').textContent = problem ? `#${problem.id} ${problem.title}` : '';
+  renderCompleteTagDialog();
+  document.getElementById('completeTagOverlay').classList.add('show');
+}
+
+function closeCompleteTagDialog() {
+  document.getElementById('completeTagOverlay').classList.remove('show');
+  pendingCompleteProblemId = null;
+  pendingCompleteTagIds = new Set();
+}
+
+function renderCompleteTagDialog() {
+  const list = document.getElementById('completeTagList');
+  const problem = getCompleteProblem();
+  if (!problem) {
+    list.innerHTML = '<div class="empty-msg">没有可选题目</div>';
+    return;
+  }
+  const ids = Object.keys(tagDefs);
+  if (ids.length === 0) {
+    list.innerHTML = '<div class="empty-msg">还没有标签，先去标签管理创建</div>';
+    return;
+  }
+  list.innerHTML = ids.map((id) => {
+    const tag = tagDefs[id];
+    const active = pendingCompleteTagIds.has(id) ? ' active' : '';
+    return `<button type="button" class="complete-tag-opt${active}" data-complete-tag-id="${id}">
+      <span class="dot" style="background:${tag.color}"></span>
+      <span class="name">${tag.name}</span>
+      <span class="check">✓</span>
+    </button>`;
+  }).join('');
+}
+
+async function toggleCompleteTagForPending(tagId) {
+  const problem = getCompleteProblem();
+  if (!problem || !tagDefs[tagId]) return;
+  if (pendingCompleteTagIds.has(tagId)) {
+    pendingCompleteTagIds.delete(tagId);
+  } else {
+    pendingCompleteTagIds.add(tagId);
+  }
+  renderCompleteTagDialog();
+}
+
+async function syncPendingCompleteTags(problemId) {
+  const current = new Set(problemTags[problemId] || []);
+  const wanted = pendingCompleteTagIds;
+  for (const tagId of current) {
+    if (!wanted.has(tagId)) await store.removeProblemTag(problemId, tagId);
+  }
+  for (const tagId of wanted) {
+    if (!current.has(tagId)) await store.addProblemTag(problemId, tagId);
+  }
+  syncFromStore();
+}
+
+async function finishCompleteWithTags(problemId, { saveTags = true } = {}) {
+  const problem = allProblems.find((p) => p.id === problemId);
+  if (!problem) return;
+  if (completedMap.has(problem.id)) {
+    closeCompleteTagDialog();
+    return;
+  }
   const nextCompleted = new Map(completedMap);
-  nextCompleted.set(currentProblem.id, today);
+  nextCompleted.set(problem.id, todayStr());
   try {
+    if (saveTags) await syncPendingCompleteTags(problem.id);
     await saveCompleted(nextCompleted);
-    renderPickerProblem(currentProblem);
+    if (currentProblem && currentProblem.id === problem.id) renderPickerProblem(problem);
     updatePickerStats();
     refreshList();
     renderHeatmap();
-    showMsg(`✅ #${currentProblem.id} ${currentProblem.title} 已完成！`);
-  } catch {
-    showCloudWriteError();
-  }
-}
-
-async function resetPicked() {
-  try {
-    await savePicked(new Set());
-    currentProblem = null;
-    renderPickerProblem(null);
-    updatePickerStats();
-    showMsg('🔄 已抽记录已重置');
+    showMsg(`✅ #${problem.id} ${problem.title} 已完成！`);
+    closeCompleteTagDialog();
   } catch {
     showCloudWriteError();
   }
@@ -1116,7 +1249,8 @@ async function toggleComplete(id) {
   if (nextCompleted.has(id)) {
     nextCompleted.delete(id);
   } else {
-    nextCompleted.set(id, todayStr());
+    openCompleteTagDialog(id);
+    return;
   }
   try {
     await saveCompleted(nextCompleted);
@@ -1326,6 +1460,24 @@ document.getElementById('tagPickerNewBtn').addEventListener('click', async () =>
   } catch {
     showCloudWriteError();
   }
+});
+
+// Complete tag dialog
+const completeOverlay = document.getElementById('completeTagOverlay');
+completeOverlay.addEventListener('click', (e) => {
+  if (e.target === completeOverlay) closeCompleteTagDialog();
+});
+document.getElementById('completeTagClose').addEventListener('click', closeCompleteTagDialog);
+document.getElementById('completeWithoutTagsBtn').addEventListener('click', () => {
+  if (pendingCompleteProblemId) finishCompleteWithTags(pendingCompleteProblemId, { saveTags: false });
+});
+document.getElementById('completeConfirmBtn').addEventListener('click', () => {
+  if (pendingCompleteProblemId) finishCompleteWithTags(pendingCompleteProblemId);
+});
+document.getElementById('completeTagList').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-complete-tag-id]');
+  if (!btn) return;
+  toggleCompleteTagForPending(btn.dataset.completeTagId);
 });
 
 // Tag Manager
@@ -1557,7 +1709,6 @@ document.getElementById('problemList').addEventListener('click', (e) => {
 // Picker
 document.getElementById('pickBtn').addEventListener('click', pickRandom);
 document.getElementById('doneBtn').addEventListener('click', markCurrentDone);
-document.getElementById('resetPickedBtn').addEventListener('click', resetPicked);
 
 document.querySelectorAll('#pickerFilters .filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1713,12 +1864,6 @@ function syncNoteDraftsFromCloud() {
   }
 }
 
-function canRenderActiveNote() {
-  if (!selectedNoteTagId) return true;
-  const draft = noteDrafts.get(selectedNoteTagId);
-  return !draft || (!draft.dirty && !draft.saving && !draft.conflict);
-}
-
 function getNoteSaveState(draft) {
   if (!draft) return { key: 'saved', text: '已保存' };
   if (draft.conflict) return { key: 'conflict', text: '远端已变化，保留本地草稿' };
@@ -1746,6 +1891,73 @@ function renderNotePreview(value) {
   preview.innerHTML = typeof marked !== 'undefined'
     ? marked.parse(value || '*暂无内容*')
     : (value || '暂无内容');
+}
+
+function renderNotesSidebar() {
+  const sidebarEl = document.querySelector('.notes-sidebar');
+  if (!sidebarEl) return;
+  sidebarEl.innerHTML = Object.keys(tagDefs).map(id => {
+    const tag = tagDefs[id];
+    const active = id === selectedNoteTagId ? ' active' : '';
+    const icon = (tag.noteMd || '').trim() ? '📝' : '';
+    return `<div class="notes-sidebar-item${active}" data-tid="${id}">
+      <span class="dot" style="background:${tag.color}"></span>
+      <span>${tag.name}</span>
+      ${icon ? `<span class="note-icon">${icon}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderActiveNoteRelated() {
+  const relatedEl = document.querySelector('.notes-related');
+  if (!relatedEl || !selectedNoteTagId) return;
+  const related = getProblemsForTag(selectedNoteTagId);
+  const relatedHtml = related.length
+    ? related.map(p => `<a href="https://leetcode.com/problems/${p.slug}/" target="_blank">#${p.id} ${p.title}</a>`).join('')
+    : '<span style="color:#bbb;font-size:13px">暂无关联题目</span>';
+  relatedEl.innerHTML = `<h5>关联题目</h5>${relatedHtml}`;
+}
+
+function refreshActiveNoteInPlace() {
+  if (!selectedNoteTagId || !tagDefs[selectedNoteTagId]) {
+    selectedNoteTagId = null;
+    renderNotePanel();
+    return;
+  }
+  const draft = getNoteDraft(selectedNoteTagId);
+  const tag = tagDefs[selectedNoteTagId];
+  const related = getProblemsForTag(selectedNoteTagId);
+  const header = document.querySelector('.notes-header h4');
+  const meta = document.querySelector('.notes-header .meta');
+  const editor = document.getElementById('noteEditor');
+  const preview = document.getElementById('notePreview');
+  const wrap = document.querySelector('.notes-editor-wrap');
+
+  renderNotesSidebar();
+  if (header) {
+    header.innerHTML = `<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${tag.color};margin-right:6px;vertical-align:middle"></span>${tag.name}`;
+  }
+  if (meta) {
+    const updated = tag.noteUpdatedAt ? `更新于 ${tag.noteUpdatedAt}` : '尚未编辑';
+    meta.textContent = `关联 ${related.length} 题 · ${updated}`;
+  }
+  renderActiveNoteRelated();
+
+  if (editor && document.activeElement !== editor && !draft.dirty && !draft.saving && !draft.conflict && editor.value !== draft.value) {
+    const top = editor.scrollTop;
+    editor.value = draft.value;
+    editor.scrollTop = top;
+  }
+  if (preview && noteViewMode === 'preview') {
+    const top = preview.scrollTop;
+    renderNotePreview(draft.value);
+    preview.scrollTop = top;
+  }
+  if (wrap) {
+    wrap.classList.remove('edit-mode', 'preview-mode');
+    wrap.classList.add(noteViewMode + '-mode');
+  }
+  setNoteSaveState(selectedNoteTagId);
 }
 
 async function persistNoteDraft(tagId, { force = false } = {}) {
@@ -1988,8 +2200,10 @@ document.addEventListener('visibilitychange', () => {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   document.getElementById('tagPickerOverlay').classList.remove('show');
+  document.getElementById('completeTagOverlay').classList.remove('show');
   document.getElementById('tagMgrOverlay').classList.remove('show');
   document.getElementById('dataMgrOverlay').classList.remove('show');
+  pendingCompleteProblemId = null;
 });
 
 // ====== INIT ======
