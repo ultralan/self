@@ -696,35 +696,56 @@
     .toolbar-status { width: 100%; margin-left: 0; }
     .sync-bar { width: 100%; }
   }
-  /* ===== 题面折叠展示（力扣 HTML 适配） ===== */
-  .problem-content-wrap { margin-top: 12px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
-  .problem-content-wrap summary {
-    cursor: pointer; font-size: 14px; color: #6b7280;
-    user-select: none; list-style: none;
+  /* ===== 题面模态展示（参考 data-overlay 风格） ===== */
+  .content-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 1000; display: flex; align-items: center; justify-content: center;
+    padding: 24px;
   }
-  .problem-content-wrap summary::-webkit-details-marker { display: none; }
-  .problem-content-wrap summary::before { content: "▸ "; }
-  .problem-content-wrap[open] summary::before { content: "▾ "; }
-  .problem-content-wrap summary:hover { color: #2563eb; }
+  .content-overlay[hidden] { display: none; }
+  .content-dialog {
+    background: white; border-radius: 14px; width: 100%; max-width: 760px;
+    max-height: 86vh; display: flex; flex-direction: column;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  }
+  .content-dialog-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px; border-bottom: 1px solid #eee;
+  }
+  .content-dialog-title { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+  .content-dialog-close {
+    border: none; background: none; font-size: 24px; line-height: 1;
+    cursor: pointer; color: #999; padding: 0 6px;
+  }
+  .content-dialog-close:hover { color: #333; }
+  .content-trigger {
+    margin-top: 6px; padding: 8px 22px; font-size: 13px;
+    background: #2563eb; color: white; border: none; border-radius: 8px;
+    cursor: pointer; font-weight: 500; transition: background 0.12s;
+  }
+  .content-trigger:hover { background: #1d4ed8; }
+  /* 题面内容美化（浅色协调） */
   .problem-content {
-    max-height: 60vh; overflow: auto; padding: 12px; margin-top: 8px;
-    background: #f9fafb; border-radius: 8px; font-size: 14px; line-height: 1.7;
-    word-break: break-word;
+    padding: 18px 22px; overflow-y: auto; font-size: 14.5px; line-height: 1.75;
+    color: #333; word-break: break-word;
   }
-  .problem-content p { margin: 8px 0; }
+  .problem-content p { margin: 10px 0; }
   .problem-content pre {
-    background: #1f2937; color: #e5e7eb; padding: 10px; border-radius: 6px;
-    overflow-x: auto; font-size: 13px; margin: 8px 0;
+    background: #f6f8fa; color: #1a1a1a; padding: 12px 14px; border-radius: 8px;
+    border: 1px solid #e1e4e8; overflow-x: auto; font-size: 13px; margin: 12px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.6;
+    white-space: pre-wrap;
   }
   .problem-content code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .problem-content pre code { background: none; padding: 0; color: inherit; }
   .problem-content :not(pre) > code {
-    background: #e5e7eb; padding: 1px 4px; border-radius: 3px; font-size: 13px;
+    background: #eef1f6; padding: 1px 5px; border-radius: 4px; font-size: 13px; color: #c7254e;
   }
-  .problem-content ul, .problem-content ol { padding-left: 24px; margin: 8px 0; }
-  .problem-content li { margin: 2px 0; }
+  .problem-content ul, .problem-content ol { padding-left: 24px; margin: 10px 0; }
+  .problem-content li { margin: 4px 0; }
   .problem-content sup { font-size: 0.75em; vertical-align: super; }
-  .problem-content img { max-width: 100%; }
+  .problem-content img { max-width: 100%; height: auto; border-radius: 6px; margin: 8px 0; }
+  .problem-content strong { font-weight: 600; color: #1a1a1a; }
   .problem-content .content-empty { color: #9ca3af; font-style: italic; }
 </style>
 </head>
@@ -899,6 +920,17 @@
       </div>
     </div>
     <div id="dataMsg" style="font-size:13px;color:#166534;margin-top:8px;display:none"></div>
+  </div>
+</div>
+
+<!-- ====== Problem Content Modal ====== -->
+<div class="content-overlay" id="contentModal" hidden>
+  <div class="content-dialog">
+    <div class="content-dialog-header">
+      <span class="content-dialog-title" id="contentModalTitle"></span>
+      <button class="content-dialog-close" id="contentModalCloseBtn">&times;</button>
+    </div>
+    <div class="problem-content" id="contentModalBody"></div>
   </div>
 </div>
 
@@ -1083,20 +1115,31 @@ function renderPickerProblem(problem) {
   const tagBadges = userTags.map(t =>
     `<span class="tag-badge clickable" style="background:${t.color}" data-tid="${t.id}" data-open-note="1">${t.name}</span>`
   ).join('');
-  const contentHtml = problem.content
-    ? problem.content
-    : '<p class="content-empty">暂无题面（付费题或爬取失败）</p>';
   card.innerHTML = `
     <div class="problem-id">#${problem.id}</div>
     <div class="problem-title">${problem.title}</div>
     <div class="problem-tags">${tags} ${tagBadges} ${badge}</div>
-    <details class="problem-content-wrap">
-      <summary>查看题面</summary>
-      <div class="problem-content">${contentHtml}</div>
-    </details>
-    <a class="open-lc" href="${lcUrl}" target="_blank">↗ 在 LeetCode 上打开</a>
+    ${problem.content
+      ? `<button class="content-trigger" onclick="openProblemContent(${problem.id})">📋 查看题面</button>`
+      : '<div style="font-size:13px;color:#bbb;margin-top:6px">暂无题面</div>'}
+    <a class="open-lc" href="${lcUrl}" target="_blank" style="margin-top:10px">↗ 在 LeetCode 上打开</a>
   `;
   document.getElementById('doneBtn').disabled = isDone;
+}
+
+// 题面模态：打开/关闭
+function openProblemContent(id) {
+  const p = LC_PROBLEMS.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('contentModalTitle').textContent = `#${p.id}  ${p.title}`;
+  document.getElementById('contentModalBody').innerHTML = p.content || '<p class="content-empty">暂无题面</p>';
+  const modal = document.getElementById('contentModal');
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+function closeProblemContent() {
+  document.getElementById('contentModal').hidden = true;
+  document.body.style.overflow = '';
 }
 
 async function pickRandom() {
@@ -2204,6 +2247,15 @@ document.getElementById('tagMgrList').addEventListener('click', (e) => {
 });
 
 // ====== EVENT BINDINGS ======
+
+// 题面模态：关闭按钮 / 点遮罩 / ESC
+document.getElementById('contentModalCloseBtn').addEventListener('click', closeProblemContent);
+document.getElementById('contentModal').addEventListener('click', (e) => {
+  if (e.target.id === 'contentModal') closeProblemContent();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('contentModal').hidden) closeProblemContent();
+});
 
 // List
 document.getElementById('searchInput').addEventListener('input', (e) => {
