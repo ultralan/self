@@ -696,6 +696,36 @@
     .toolbar-status { width: 100%; margin-left: 0; }
     .sync-bar { width: 100%; }
   }
+  /* ===== 题面折叠展示（力扣 HTML 适配） ===== */
+  .problem-content-wrap { margin-top: 12px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+  .problem-content-wrap summary {
+    cursor: pointer; font-size: 14px; color: #6b7280;
+    user-select: none; list-style: none;
+  }
+  .problem-content-wrap summary::-webkit-details-marker { display: none; }
+  .problem-content-wrap summary::before { content: "▸ "; }
+  .problem-content-wrap[open] summary::before { content: "▾ "; }
+  .problem-content-wrap summary:hover { color: #2563eb; }
+  .problem-content {
+    max-height: 60vh; overflow: auto; padding: 12px; margin-top: 8px;
+    background: #f9fafb; border-radius: 8px; font-size: 14px; line-height: 1.7;
+    word-break: break-word;
+  }
+  .problem-content p { margin: 8px 0; }
+  .problem-content pre {
+    background: #1f2937; color: #e5e7eb; padding: 10px; border-radius: 6px;
+    overflow-x: auto; font-size: 13px; margin: 8px 0;
+  }
+  .problem-content code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .problem-content pre code { background: none; padding: 0; color: inherit; }
+  .problem-content :not(pre) > code {
+    background: #e5e7eb; padding: 1px 4px; border-radius: 3px; font-size: 13px;
+  }
+  .problem-content ul, .problem-content ol { padding-left: 24px; margin: 8px 0; }
+  .problem-content li { margin: 2px 0; }
+  .problem-content sup { font-size: 0.75em; vertical-align: super; }
+  .problem-content img { max-width: 100%; }
+  .problem-content .content-empty { color: #9ca3af; font-style: italic; }
 </style>
 </head>
 <body>
@@ -1053,10 +1083,17 @@ function renderPickerProblem(problem) {
   const tagBadges = userTags.map(t =>
     `<span class="tag-badge clickable" style="background:${t.color}" data-tid="${t.id}" data-open-note="1">${t.name}</span>`
   ).join('');
+  const contentHtml = problem.content
+    ? problem.content
+    : '<p class="content-empty">暂无题面（付费题或爬取失败）</p>';
   card.innerHTML = `
     <div class="problem-id">#${problem.id}</div>
     <div class="problem-title">${problem.title}</div>
     <div class="problem-tags">${tags} ${tagBadges} ${badge}</div>
+    <details class="problem-content-wrap">
+      <summary>查看题面</summary>
+      <div class="problem-content">${contentHtml}</div>
+    </details>
     <a class="open-lc" href="${lcUrl}" target="_blank">↗ 在 LeetCode 上打开</a>
   `;
   document.getElementById('doneBtn').disabled = isDone;
