@@ -94,7 +94,7 @@ async function main() {
     const p = targets[i];
     const { title, content, reason } = await fetchQuestionContent(p.slug);
     if (title) p.title = title;
-    if (content) p.content = content;
+    if (content) p.content = content.replace(/assets\.leetcode\.com/g, 'assets.leetcode.cn');
     if (!content) failures.push({ id: p.id, slug: p.slug, reason });
     console.log(`[${i + 1}/${targets.length}] #${p.id} ${p.slug} → ${content ? 'OK' : 'FAIL(' + reason + ')'}`);
     if (i < targets.length - 1) await sleep(300); // 限速，避免触发 429（末题后不必等待）
