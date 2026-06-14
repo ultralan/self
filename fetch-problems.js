@@ -1,16 +1,26 @@
 #!/usr/bin/env node
 
 /**
- * Fetch LeetCode Top 100 Liked + Top Interview 150 problems,
- * deduplicate, and save to problems.json
+ * LeetCode 中文站题面补全器
+ *
+ * 读取现有 problems.json（含 id/slug/in），用 slug 去 leetcode.cn
+ * 逐题拉取中文标题与中文题面，回填后写回 problems.json。
+ * id 不变 → Supabase 用户进度数据无损保留。
+ *
+ * 用法：
+ *   node fetch-problems.js        # 全量爬取
+ *   node fetch-problems.js 3      # 仅爬前 3 题（验证用）
  */
 
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const { QUESTION_DETAIL_QUERY, parseQuestion } = require('./leetcode-cn');
 
 function graphql(query, variables = {}) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({ query, variables });
-    const url = new URL('https://leetcode.com/graphql');
+    const url = new URL('https://leetcode.cn/graphql');
     const options = {
       hostname: url.hostname,
       path: url.pathname,
@@ -19,8 +29,8 @@ function graphql(query, variables = {}) {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(data),
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Referer': 'https://leetcode.com/problemset/',
-        'Origin': 'https://leetcode.com',
+        'Referer': 'https://leetcode.cn/problemset/',
+        'Origin': 'https://leetcode.cn',
       },
     };
 
@@ -28,201 +38,76 @@ function graphql(query, variables = {}) {
       let body = '';
       res.on('data', (chunk) => (body += chunk));
       res.on('end', () => {
+        if (res.statusCode === 429) return reject(new Error('RATE_LIMITED'));
+        if (res.statusCode >= 400) return reject(new Error('HTTP ' + res.statusCode));
         try {
           resolve(JSON.parse(body));
         } catch (e) {
-          reject(new Error(`Parse error: ${e.message}\nStatus: ${res.statusCode}\nBody: ${body.slice(0, 500)}`));
+          reject(new Error(`Parse error: ${e.message} | status=${res.statusCode} | body=${body.slice(0, 200)}`));
         }
       });
     });
     req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('timeout')));
     req.write(data);
     req.end();
   });
 }
 
-// Query for problem lists (e.g. Top 100 Liked)
-const PROBLEMSET_QUERY = `
-query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
-  problemsetQuestionList: questionList(
-    categorySlug: $categorySlug
-    limit: $limit
-    skip: $skip
-    filters: $filters
-  ) {
-    total: totalNum
-    questions: data {
-      questionFrontendId
-      title
-      titleSlug
-    }
-  }
-}
-`;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Query for study plans (e.g. Top Interview 150)
-const STUDY_PLAN_QUERY = `
-query studyPlanV2Detail($planSlug: String!) {
-  studyPlanV2Detail(planSlug: $planSlug) {
-    name
-    planSubGroups {
-      name
-      questions {
-        questionFrontendId
-        title
-        titleSlug
+// 拉取单题中文标题与题面，带重试与 429 退避
+async function fetchQuestionContent(slug, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const raw = await graphql(QUESTION_DETAIL_QUERY, { titleSlug: slug });
+      // leetcode.cn 返回 { data: { question: {...} } }，parseQuestion 接收 { question } 这一层
+      return parseQuestion(raw && raw.data);
+    } catch (e) {
+      if (e.message === 'RATE_LIMITED') {
+        await sleep(5000); // 429 退避
+        continue;
       }
-    }
-  }
-}
-`;
-
-async function fetchByListId(listId) {
-  console.log(`Fetching problem list: "${listId}" ...`);
-  const allProblems = [];
-  let skip = 0;
-  const limit = 100;
-  let total = 0;
-
-  while (true) {
-    const result = await graphql(PROBLEMSET_QUERY, {
-      categorySlug: '',
-      limit,
-      skip,
-      filters: { listId },
-    });
-
-    const data = result?.data?.problemsetQuestionList;
-    if (!data || !data.questions) {
-      console.log(`  Error:`, JSON.stringify(result).slice(0, 300));
-      return null;
-    }
-
-    if (allProblems.length === 0) total = data.total;
-    for (const q of data.questions) {
-      if (q.questionFrontendId) {
-        allProblems.push({
-          id: parseInt(q.questionFrontendId, 10),
-          title: q.title,
-          slug: q.titleSlug,
-        });
+      if (attempt < retries) {
+        await sleep(1000 * (attempt + 1)); // 普通错误递增重试
+        continue;
       }
-    }
-    console.log(`  Progress: ${allProblems.length}/${total} ...`);
-    if (allProblems.length >= total) break;
-    skip += limit;
-  }
-  console.log(`  ✓ Got ${allProblems.length} problems`);
-  return allProblems;
-}
-
-async function fetchStudyPlan(planSlug) {
-  console.log(`Fetching study plan: "${planSlug}" ...`);
-  const result = await graphql(STUDY_PLAN_QUERY, { planSlug });
-
-  const plan = result?.data?.studyPlanV2Detail;
-  if (!plan) {
-    console.log(`  Error:`, JSON.stringify(result).slice(0, 300));
-    return null;
-  }
-
-  const allProblems = [];
-  for (const group of (plan.planSubGroups || [])) {
-    for (const q of (group.questions || [])) {
-      if (q.questionFrontendId) {
-        allProblems.push({
-          id: parseInt(q.questionFrontendId, 10),
-          title: q.title,
-          slug: q.titleSlug,
-        });
-      }
+      return { title: null, content: null, reason: 'error:' + e.message };
     }
   }
-  console.log(`  ✓ Got ${allProblems.length} problems from study plan "${plan.name || planSlug}"`);
-  return allProblems;
+  return { title: null, content: null, reason: 'exhausted' };
 }
 
 async function main() {
-  console.log('=== LeetCode Problem Fetcher ===\n');
+  const problemsPath = path.join(__dirname, 'problems.json');
+  const data = JSON.parse(fs.readFileSync(problemsPath, 'utf-8'));
+  const problems = data.problems;
 
-  // Fetch Top 100 Liked (regular problem list)
-  const top100 = await fetchByListId('top-100-liked-questions');
+  const limitArg = parseInt(process.argv[2], 10);
+  const targets = limitArg > 0 ? problems.slice(0, limitArg) : problems;
 
-  // Fetch Top Interview 150 (study plan)
-  const top150 = await fetchStudyPlan('top-interview-150');
+  console.log(`=== LeetCode 中文站题面补全 ===`);
+  console.log(`目标 ${targets.length} / 共 ${problems.length} 题\n`);
 
-  if (!top100 && !top150) {
-    console.error('Failed to fetch any problem lists.');
-    process.exit(1);
+  const failures = [];
+  for (let i = 0; i < targets.length; i++) {
+    const p = targets[i];
+    const { title, content, reason } = await fetchQuestionContent(p.slug);
+    if (title) p.title = title;
+    if (content) p.content = content;
+    if (!content) failures.push({ id: p.id, slug: p.slug, reason });
+    console.log(`[${i + 1}/${targets.length}] #${p.id} ${p.slug} → ${content ? 'OK' : 'FAIL(' + reason + ')'}`);
+    if (i < targets.length - 1) await sleep(300); // 限速，避免触发 429（末题后不必等待）
   }
 
-  // Combine and deduplicate by problem ID
-  const seen = new Map();
-  const sourceMap = new Map();
-  const sets = [];
-
-  if (top100) {
-    sets.push({ name: 'top-100-liked', problems: top100 });
-    for (const p of top100) {
-      seen.set(p.id, p);
-      sourceMap.set(p.id, ['Top 100']);
-    }
-  }
-
-  if (top150) {
-    sets.push({ name: 'top-interview-150', problems: top150 });
-    for (const p of top150) {
-      if (seen.has(p.id)) {
-        sourceMap.get(p.id).push('Top 150');
-      } else {
-        seen.set(p.id, p);
-        sourceMap.set(p.id, ['Top 150']);
-      }
-    }
-  }
-
-  const deduped = Array.from(seen.values()).sort((a, b) => a.id - b.id);
-
-  // Tag each problem with its source
-  const problemsWithTags = deduped.map(p => {
-    const tags = sourceMap.get(p.id) || [];
-    return {
-      id: p.id,
-      title: p.title,
-      slug: p.slug,
-      in: tags,
-    };
-  });
-
-  // Output summary
-  console.log('\n=== Summary ===');
-  for (const s of sets) {
-    console.log(`  ${s.name}: ${s.problems.length} problems`);
-  }
-  console.log(`  Combined unique: ${deduped.length} problems`);
-  console.log(`  Overlap (in both): ${problemsWithTags.filter(p => p.in.length > 1).length} problems`);
-
-  // Write to file
-  const fs = require('fs');
-  const path = require('path');
-  const outPath = path.join(__dirname, 'problems.json');
-
-  const output = {
-    meta: {
-      totalTop100: top100?.length || 0,
-      totalTop150: top150?.length || 0,
-      totalUnique: deduped.length,
-      overlap: problemsWithTags.filter(p => p.in.length > 1).length,
-      sources: sets.map(s => s.name),
-    },
-    problems: problemsWithTags,
-  };
-
-  fs.writeFileSync(outPath, JSON.stringify(output, null, 2), 'utf-8');
-  console.log(`\nSaved to: ${outPath}`);
+  // 写回完整 data（含 meta），仅 problems 内的 title/content 被更新
+  fs.writeFileSync(problemsPath, JSON.stringify(data, null, 2), 'utf-8');
+  console.log(`\n已写回 ${problemsPath}`);
+  console.log(`失败 ${failures.length} 题：`);
+  failures.forEach((f) => console.log(`  #${f.id} ${f.slug}: ${f.reason}`));
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Fatal:', err);
   process.exit(1);
 });
