@@ -1048,7 +1048,7 @@ function renderPickerProblem(problem) {
   }).join('');
   const isDone = completedMap.has(problem.id);
   const badge = isDone ? '<span class="completed-badge">✅ 已完成</span>' : '';
-  const lcUrl = `https://leetcode.com/problems/${problem.slug}/`;
+  const lcUrl = `https://leetcode.cn/problems/${problem.slug}/`;
   const userTags = getProblemTags(problem.id);
   const tagBadges = userTags.map(t =>
     `<span class="tag-badge clickable" style="background:${t.color}" data-tid="${t.id}" data-open-note="1">${t.name}</span>`
@@ -1234,7 +1234,7 @@ function refreshList() {
       `<span class="tag-badge clickable" style="background:${t.color}" data-tid="${t.id}" data-open-note="1">${t.name}<span class="del" data-pid="${p.id}" data-tid="${t.id}">&times;</span></span>`
     ).join('');
     const addBtn = `<span class="tag-add-btn" data-pid="${p.id}">+</span>`;
-    const lcUrl = `https://leetcode.com/problems/${p.slug}/`;
+    const lcUrl = `https://leetcode.cn/problems/${p.slug}/`;
     return `<div class="problem-row ${done ? 'completed' : ''}" data-id="${p.id}">
       <div class="cb ${done ? 'checked' : ''}" data-id="${p.id}"></div>
       <span class="p-id">#${p.id}</span>
@@ -1913,7 +1913,7 @@ function renderActiveNoteRelated() {
   if (!relatedEl || !selectedNoteTagId) return;
   const related = getProblemsForTag(selectedNoteTagId);
   const relatedHtml = related.length
-    ? related.map(p => `<a href="https://leetcode.com/problems/${p.slug}/" target="_blank">#${p.id} ${p.title}</a>`).join('')
+    ? related.map(p => `<a href="https://leetcode.cn/problems/${p.slug}/" target="_blank">#${p.id} ${p.title}</a>`).join('')
     : '<span style="color:#bbb;font-size:13px">暂无关联题目</span>';
   relatedEl.innerHTML = `<h5>关联题目</h5>${relatedHtml}`;
 }
@@ -2073,7 +2073,7 @@ function renderNotePanel() {
   }).join('');
 
   const relatedHtml = related.length
-    ? related.map(p => `<a href="https://leetcode.com/problems/${p.slug}/" target="_blank">#${p.id} ${p.title}</a>`).join('')
+    ? related.map(p => `<a href="https://leetcode.cn/problems/${p.slug}/" target="_blank">#${p.id} ${p.title}</a>`).join('')
     : '<span style="color:#bbb;font-size:13px">暂无关联题目</span>';
 
   const updated = t.noteUpdatedAt ? `更新于 ${t.noteUpdatedAt}` : '尚未编辑';
