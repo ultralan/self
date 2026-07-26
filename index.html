@@ -971,17 +971,14 @@ function localYMD(d) {
 const todayStr = () => store.todayStr ? store.todayStr() : localYMD(new Date());
 
 function syncFromStore() {
-  pickedIds = store.getPickedIds();
   completedMap = store.getCompleted();
   tagDefs = store.getTagDefs();
   problemTags = store.getProblemTags();
 }
 
-function savePicked(set) { return store.savePickedIds(set).then(() => syncFromStore()); }
 function saveCompleted(map) { return store.saveCompleted(map).then(() => syncFromStore()); }
 function saveTags(obj) { return store.saveTags(obj).then(() => syncFromStore()); }
 
-let pickedIds = new Set();
 let completedMap = new Map();
 let tagDefs = {};
 let problemTags = {};
@@ -1164,13 +1161,9 @@ async function pickRandom() {
     return;
   }
   const picked = undone[Math.floor(Math.random() * undone.length)];
-  // 标记为"已抽到"（仅用于记忆最近抽过哪些，不限制抽题范围）
-  const nextPicked = new Set(pickedIds);
-  nextPicked.add(picked.id);
-  // 题目已在本地，必须先立即展示；云端仅异步记录抽题历史。
+  // 随机抽题是纯本地查询，不记录也不同步“已抽到”历史。
   renderPickerProblem(picked);
   updatePickerStats();
-  savePicked(nextPicked).catch(() => showCloudWriteError());
 }
 
 function markCurrentDone() {
