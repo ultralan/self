@@ -753,7 +753,7 @@
 <div class="app">
   <div class="header">
     <h1>🎯 LeetCode 刷题追踪器</h1>
-    <div class="subtitle">Top 100 Liked × Top Interview 150 · 182 题</div>
+    <div class="subtitle">LeetCode 精选 182 题 · 面试鸭 AI 370 题</div>
   </div>
 
   <div class="app-toolbar">
@@ -783,6 +783,7 @@
         <button class="filter-btn" data-filter="top100">💚 Top 100</button>
         <button class="filter-btn" data-filter="top150">💙 Top 150</button>
         <button class="filter-btn" data-filter="both">💜 重叠</button>
+        <button class="filter-btn" data-filter="mianshiya">🦆 面试鸭 AI</button>
       </div>
 
       <div class="problem-card empty" id="card">
@@ -838,6 +839,7 @@
             <option value="top100">💚 Top 100</option>
             <option value="top150">💙 Top 150</option>
             <option value="both">💜 重叠</option>
+            <option value="mianshiya">🦆 面试鸭 AI</option>
             <option value="tag" disabled>── 自定义标签 ──</option>
           </select>
         </div>
@@ -952,11 +954,12 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="data.js"></script>
+<script src="mianshiya-data.js"></script>
 <script src="sync-db.js"></script>
 <script src="store.js"></script>
 <script>
 // ====== DATA ======
-const allProblems = LC_PROBLEMS;
+const allProblems = [...LC_PROBLEMS, ...(typeof MIANSHIYA_PROBLEMS === 'undefined' ? [] : MIANSHIYA_PROBLEMS)];
 const store = createStore();
 
 function localYMD(d) {
@@ -1066,6 +1069,7 @@ function getFiltered(filter) {
     case 'top100': return allProblems.filter(p => p.in.includes('Top 100'));
     case 'top150': return allProblems.filter(p => p.in.includes('Top 150'));
     case 'both':   return allProblems.filter(p => p.in.length > 1);
+    case 'mianshiya': return allProblems.filter(p => p.in.includes('面试鸭 AI'));
     default:       return allProblems;
   }
 }
@@ -1110,7 +1114,9 @@ function renderPickerProblem(problem) {
   }).join('');
   const isDone = completedMap.has(problem.id);
   const badge = isDone ? '<span class="completed-badge">✅ 已完成</span>' : '';
-  const lcUrl = `https://leetcode.cn/problems/${problem.slug}/`;
+  const sourceUrl = problem.sourceUrl || `https://leetcode.cn/problems/${problem.slug}/`;
+  const sourceLabel = problem.sourceUrl ? '↗ 在面试鸭中打开' : '↗ 在 LeetCode 上打开';
+  const sourceTags = (problem.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
   const userTags = getProblemTags(problem.id);
   const tagBadges = userTags.map(t =>
     `<span class="tag-badge clickable" style="background:${t.color}" data-tid="${t.id}" data-open-note="1">${t.name}</span>`
@@ -1118,18 +1124,18 @@ function renderPickerProblem(problem) {
   card.innerHTML = `
     <div class="problem-id">#${problem.id}</div>
     <div class="problem-title">${problem.title}</div>
-    <div class="problem-tags">${tags} ${tagBadges} ${badge}</div>
+    <div class="problem-tags">${tags} ${sourceTags} ${tagBadges} ${badge}</div>
     ${problem.content
       ? `<button class="content-trigger" onclick="openProblemContent(${problem.id})">📋 查看题面</button>`
       : '<div style="font-size:13px;color:#bbb;margin-top:6px">暂无题面</div>'}
-    <a class="open-lc" href="${lcUrl}" target="_blank" style="margin-top:10px">↗ 在 LeetCode 上打开</a>
+    <a class="open-lc" href="${sourceUrl}" target="_blank" style="margin-top:10px">${sourceLabel}</a>
   `;
   document.getElementById('doneBtn').disabled = isDone;
 }
 
 // 题面模态：打开/关闭
 function openProblemContent(id) {
-  const p = LC_PROBLEMS.find(x => x.id === id);
+  const p = allProblems.find(x => x.id === id);
   if (!p) return;
   document.getElementById('contentModalTitle').textContent = `#${p.id}  ${p.title}`;
   document.getElementById('contentModalBody').innerHTML = p.content || '<p class="content-empty">暂无题面</p>';
@@ -1274,6 +1280,7 @@ function getFilteredList() {
     case 'top100':  list = list.filter(p => p.in.includes('Top 100')); break;
     case 'top150':  list = list.filter(p => p.in.includes('Top 150')); break;
     case 'both':    list = list.filter(p => p.in.length > 1); break;
+    case 'mianshiya': list = list.filter(p => p.in.includes('面试鸭 AI')); break;
   }
 
   // Tag filter
@@ -1309,17 +1316,18 @@ function refreshList() {
     const srcTags = (p.in || []).map(t =>
       `<span class="tag ${t === 'Top 100' ? 'top100' : 'top150'}">${t}</span>`
     ).join('');
+    const sourceTags = (p.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
     const userTags = getProblemTags(p.id);
     const tagBadges = userTags.map(t =>
       `<span class="tag-badge clickable" style="background:${t.color}" data-tid="${t.id}" data-open-note="1">${t.name}<span class="del" data-pid="${p.id}" data-tid="${t.id}">&times;</span></span>`
     ).join('');
     const addBtn = `<span class="tag-add-btn" data-pid="${p.id}">+</span>`;
-    const lcUrl = `https://leetcode.cn/problems/${p.slug}/`;
+    const sourceUrl = p.sourceUrl || `https://leetcode.cn/problems/${p.slug}/`;
     return `<div class="problem-row ${done ? 'completed' : ''}" data-id="${p.id}">
       <div class="cb ${done ? 'checked' : ''}" data-id="${p.id}"></div>
       <span class="p-id">#${p.id}</span>
-      <span class="p-title"><a href="${lcUrl}" target="_blank" style="color:inherit;text-decoration:none">${p.title}</a></span>
-      <span class="p-tags">${srcTags}${tagBadges}${addBtn}</span>
+      <span class="p-title"><a href="${sourceUrl}" target="_blank" style="color:inherit;text-decoration:none">${p.title}</a></span>
+      <span class="p-tags">${srcTags}${sourceTags}${tagBadges}${addBtn}</span>
     </div>`;
   }).join('');
 }
