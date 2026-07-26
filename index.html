@@ -753,7 +753,7 @@
 <div class="app">
   <div class="header">
     <h1>🎯 LeetCode 刷题追踪器</h1>
-    <div class="subtitle">LeetCode 精选 182 题 · 面试鸭 AI 370 题</div>
+    <div class="subtitle">LeetCode 精选 182 题 · 面试鸭题库 570 题</div>
   </div>
 
   <div class="app-toolbar">
@@ -784,6 +784,7 @@
         <button class="filter-btn" data-filter="top150">💙 Top 150</button>
         <button class="filter-btn" data-filter="both">💜 重叠</button>
         <button class="filter-btn" data-filter="mianshiya">🦆 面试鸭 AI</button>
+        <button class="filter-btn" data-filter="mianshiya-java">☕ 面试鸭 Java</button>
       </div>
 
       <div class="problem-card empty" id="card">
@@ -840,6 +841,7 @@
             <option value="top150">💙 Top 150</option>
             <option value="both">💜 重叠</option>
             <option value="mianshiya">🦆 面试鸭 AI</option>
+            <option value="mianshiya-java">☕ 面试鸭 Java</option>
             <option value="tag" disabled>── 自定义标签 ──</option>
           </select>
         </div>
@@ -1072,6 +1074,7 @@ function getFiltered(filter) {
     case 'top150': return allProblems.filter(p => p.in.includes('Top 150'));
     case 'both':   return allProblems.filter(p => p.in.length > 1);
     case 'mianshiya': return allProblems.filter(p => p.in.includes('面试鸭 AI'));
+    case 'mianshiya-java': return allProblems.filter(p => p.in.includes('面试鸭 Java'));
     default:       return allProblems;
   }
 }
@@ -1276,6 +1279,7 @@ function getFilteredList() {
     case 'top150':  list = list.filter(p => p.in.includes('Top 150')); break;
     case 'both':    list = list.filter(p => p.in.length > 1); break;
     case 'mianshiya': list = list.filter(p => p.in.includes('面试鸭 AI')); break;
+    case 'mianshiya-java': list = list.filter(p => p.in.includes('面试鸭 Java')); break;
   }
 
   // Tag filter

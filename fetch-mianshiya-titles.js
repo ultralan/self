@@ -3,10 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const questionBankId = '1906189461556076546';
 const endpoint = 'https://api.mianshiya.com/api/question_bank/list_question';
+const banks = [
+  { id: '1906189461556076546', label: '面试鸭 AI' },
+  { id: '1860871861809897474', label: '面试鸭 Java' },
+];
 
-async function fetchPage(current) {
+async function fetchPage(questionBankId, current) {
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -23,20 +26,25 @@ async function fetchPage(current) {
 }
 
 async function main() {
-  const first = await fetchPage(1);
-  const records = [...(first.records || [])];
-  for (let current = 2; current <= Number(first.pages || 1); current += 1) {
-    records.push(...((await fetchPage(current)).records || []));
+  const problems = [];
+  for (const bank of banks) {
+    const first = await fetchPage(bank.id, 1);
+    const records = [...(first.records || [])];
+    for (let current = 2; current <= Number(first.pages || 1); current += 1) {
+      records.push(...((await fetchPage(bank.id, current)).records || []));
+    }
+    for (const item of records) {
+      problems.push({
+        id: -(1000000 + problems.length),
+        title: item.title,
+        in: [bank.label],
+        tags: item.tagList || [],
+        sourceUrl: `https://www.mianshiya.com/bank/${bank.id}/question/${item.id}`,
+      });
+    }
   }
-  const problems = records.map((item, index) => ({
-    id: -(1000000 + index),
-    title: item.title,
-    in: ['面试鸭 AI'],
-    tags: item.tagList || [],
-    sourceUrl: `https://www.mianshiya.com/bank/${questionBankId}/question/${item.id}`,
-  }));
   const dataset = {
-    source: `https://www.mianshiya.com/bank/${questionBankId}`,
+    sources: banks.map((bank) => ({ name: bank.label, url: `https://www.mianshiya.com/bank/${bank.id}` })),
     total: problems.length,
     problems,
   };
@@ -44,7 +52,7 @@ async function main() {
   const output = [
     '// 由 fetch-mianshiya-titles.js 自动生成，仅包含公开题目目录。',
     `const MIANSHIYA_PROBLEMS = ${JSON.stringify(dataset.problems)};`,
-    `const MIANSHIYA_META = ${JSON.stringify({ source: dataset.source, total: dataset.total })};`,
+    `const MIANSHIYA_META = ${JSON.stringify({ sources: dataset.sources, total: dataset.total })};`,
     '',
   ].join('\n');
   fs.writeFileSync(path.join(__dirname, 'mianshiya-data.js'), output, 'utf8');
