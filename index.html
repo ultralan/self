@@ -994,9 +994,14 @@ const noteDrafts = new Map();
 
 function updateSyncBar(status) {
   const bar = document.getElementById('syncBar');
+  // 同步不影响本地题库和抽题，不把后台任务展示成前台加载状态。
+  if (status === 'syncing') {
+    bar.className = 'sync-bar';
+    bar.textContent = '';
+    return;
+  }
   const labels = {
     synced: '☁️ 云端在线 — 本地缓存仅用于导出兜底',
-    syncing: '📚 题库已本地加载 · 学习记录正在同步…',
     offline: '⚠️ 云端 API 不可用 — 写操作已暂停，本地缓存仅可用于导出',
     error: '❌ 无法连接云端 — 请检查 config.js',
   };
