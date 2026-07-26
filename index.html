@@ -996,7 +996,7 @@ function updateSyncBar(status) {
   const bar = document.getElementById('syncBar');
   const labels = {
     synced: '☁️ 云端在线 — 本地缓存仅用于导出兜底',
-    syncing: '⏳ 正在连接云端…',
+    syncing: '📚 题库已本地加载 · 学习记录正在同步…',
     offline: '⚠️ 云端 API 不可用 — 写操作已暂停，本地缓存仅可用于导出',
     error: '❌ 无法连接云端 — 请检查 config.js',
   };
@@ -2305,6 +2305,13 @@ document.addEventListener('keydown', (e) => {
 
 // ====== INIT ======
 (async function initApp() {
+  // 题库数据已经随页面打包，不能等待云端学习记录后才可抽题。
+  syncFromStore();
+  updateSyncBar(store.getSyncStatus());
+  updatePickerStats();
+  refreshList();
+  buildTagFilterOptions();
+  renderHeatmap();
   try {
     store.setOnDataChange(applyCloudDataToUI);
     await store.init();
