@@ -1167,13 +1167,10 @@ async function pickRandom() {
   // 标记为"已抽到"（仅用于记忆最近抽过哪些，不限制抽题范围）
   const nextPicked = new Set(pickedIds);
   nextPicked.add(picked.id);
-  try {
-    await savePicked(nextPicked);
-    renderPickerProblem(picked);
-    updatePickerStats();
-  } catch {
-    showCloudWriteError();
-  }
+  // 题目已在本地，必须先立即展示；云端仅异步记录抽题历史。
+  renderPickerProblem(picked);
+  updatePickerStats();
+  savePicked(nextPicked).catch(() => showCloudWriteError());
 }
 
 function markCurrentDone() {
